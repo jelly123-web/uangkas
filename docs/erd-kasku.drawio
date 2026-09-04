@@ -1,0 +1,111 @@
+<mxfile host="app.diagrams.net" agent="Codex">
+  <diagram id="erd-kasku" name="ERD KasKu">
+    <mxGraphModel dx="3860" dy="2324" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="tahun_ajaran" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;TAHUN_AJARAN&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- name&#xa;- is_active&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="250" width="250" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="kelas" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;KELAS&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- name&#xa;- nominal_kas&#xa;- (FK) academic_year_id&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="270" width="250" x="480" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="pengguna" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;PENGGUNA&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- full_name&#xa;- nis&#xa;- email&#xa;- password_hash&#xa;- profile_photo&#xa;- role&#xa;- (FK) class_id&#xa;- is_active&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="360" width="280" x="890" y="-30" as="geometry" />
+        </mxCell>
+        <mxCell id="bendahara_kelas" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;BENDAHARA_KELAS&lt;/b&gt;&lt;hr/&gt;- (PK,FK) class_id&#xa;- (FK) user_id [UNIQUE]&#xa;- assigned_at&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="260" width="280" x="1290" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="jenis_denda" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;JENIS_DENDA&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- (FK) class_id&#xa;- title&#xa;- amount&#xa;- created_by_user_id&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="290" width="270" x="60" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="pengaturan_kas" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;PENGATURAN_KAS&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- payment_cycle&#xa;- nominal&#xa;- payment_day&#xa;- notify_unpaid&#xa;- allow_late_payment&#xa;- auto_report&#xa;- fine_enabled&#xa;- fine_amount&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="360" width="270" x="380" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="transaksi_kas" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;TRANSAKSI_KAS&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- title&#xa;- type&#xa;- amount&#xa;- category&#xa;- note&#xa;- (FK) class_id&#xa;- (FK) student_id&#xa;- (FK) academic_year_id&#xa;- backup_key&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="390" width="290" x="710" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="preferensi_pengguna" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#d4e1f5;strokeColor=#4a86e8;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;PREFERENSI_PENGGUNA&lt;/b&gt;&lt;hr/&gt;- (PK,FK) user_id&#xa;- last_active_page&#xa;- created_at&#xa;- updated_at" vertex="1">
+          <mxGeometry height="130" width="260" x="1360" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="sesi_pengguna" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#d4e1f5;strokeColor=#4a86e8;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;SESI_PENGGUNA&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- (FK) user_id&#xa;- session_token [UNIQUE]&#xa;- is_active&#xa;- created_at&#xa;- updated_at&#xa;- last_seen_at&#xa;- closed_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="310" width="280" x="1050" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="pengaturan_aplikasi" parent="1" style="shape=rectangle;whiteSpace=wrap;html=1;rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacingLeft=12;spacingTop=8;" value="&lt;b&gt;PENGATURAN_APLIKASI&lt;/b&gt;&lt;hr/&gt;- (PK) id&#xa;- app_name&#xa;- logo_image&#xa;- sidebar_color&#xa;- background_mode&#xa;- background_color&#xa;- background_image&#xa;- created_at&#xa;- updated_at&#xa;- delete&#xa;- deleted_at&#xa;- deleted_day&#xa;- deleted_by_user_id&#xa;- deleted_by_name&#xa;- deleted_by_ip" vertex="1">
+          <mxGeometry height="320" width="280" x="1360" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" edge="1" parent="1" source="kelas" style="endArrow=block;html=1;rounded=0;fontSize=13;" target="tahun_ajaran" value="academic_year_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" edge="1" parent="1" source="pengguna" style="endArrow=block;html=1;rounded=0;fontSize=13;entryX=0.999;entryY=0.448;entryDx=0;entryDy=0;entryPerimeter=0;" target="kelas" value="class_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" edge="1" parent="1" source="bendahara_kelas" style="endArrow=block;html=1;rounded=0;fontSize=13;" target="kelas" value="class_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1430" y="-80" />
+              <mxPoint x="1020" y="-80" />
+              <mxPoint x="605" y="-80" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r4" edge="1" parent="1" source="bendahara_kelas" style="endArrow=block;html=1;rounded=0;fontSize=13;" target="pengguna" value="user_id">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" edge="1" parent="1" source="jenis_denda" style="endArrow=block;html=1;rounded=0;fontSize=13;entryX=0.25;entryY=1;entryDx=0;entryDy=0;exitX=0.481;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;" target="kelas" value="class_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="190" y="360" />
+              <mxPoint x="542.5" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r6" edge="1" parent="1" style="endArrow=block;html=1;rounded=0;fontSize=13;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" target="kelas" value="class_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="800" y="360" />
+              <mxPoint x="667.5" y="360" />
+            </Array>
+            <mxPoint x="800" y="450" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r7" edge="1" parent="1" source="transaksi_kas" style="endArrow=block;html=1;rounded=0;fontSize=13;entryX=0.357;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.723;exitY=0.003;exitDx=0;exitDy=0;exitPerimeter=0;" target="pengguna" value="student_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="400" />
+              <mxPoint x="920" y="360" />
+              <mxPoint x="990" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r8" edge="1" parent="1" source="transaksi_kas" style="endArrow=block;html=1;rounded=0;fontSize=13;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="tahun_ajaran" value="academic_year_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="855" y="880" />
+              <mxPoint x="-120" y="880" />
+              <mxPoint x="-120" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r9" edge="1" parent="1" source="preferensi_pengguna" style="endArrow=block;html=1;rounded=0;fontSize=13;entryX=1;entryY=0.75;entryDx=0;entryDy=0;exitX=0.232;exitY=-0.001;exitDx=0;exitDy=0;exitPerimeter=0;" target="pengguna" value="user_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1420" y="320" />
+              <mxPoint x="1200" y="320" />
+              <mxPoint x="1200" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r10" edge="1" parent="1" source="sesi_pengguna" style="endArrow=block;html=1;rounded=0;fontSize=13;exitX=0.392;exitY=0.003;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.679;entryY=0.998;entryDx=0;entryDy=0;entryPerimeter=0;" target="pengguna" value="user_id">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1159.76" y="400" />
+              <mxPoint x="1159.76" y="360" />
+              <mxPoint x="1080" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
