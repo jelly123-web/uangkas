@@ -1049,6 +1049,7 @@ function buildFineChartRows(transactions, period) {
 }
 
 function buildFinanceChartRows(transactions, period) {
+  transactions = transactions.filter((item) => Number.isFinite(new Date(item.created_at).getTime()));
   const latestDate = transactions.length
     ? transactions.reduce((latest, item) => {
         const itemDate = new Date(item.created_at);
@@ -1064,7 +1065,7 @@ function buildFinanceChartRows(transactions, period) {
     .slice(-5);
   const labels =
     period === "week"
-      ? Array.from({ length: 4 }, (_, index) => `Minggu ${index + 1}`)
+      ? Array.from({ length: Math.ceil(new Date(latestYear, latestMonth + 1, 0).getDate() / 7) }, (_, index) => `Minggu ${index + 1}`)
       : period === "month"
         ? months.map((item) => item.label.slice(0, 3))
         : years.map((year) => `${year}`);
@@ -1083,7 +1084,7 @@ function buildFinanceChartRows(transactions, period) {
       if (itemDate.getFullYear() !== latestYear || itemDate.getMonth() !== latestMonth) {
         return;
       }
-      periodIndex = Math.min(4, Math.floor((itemDate.getDate() - 1) / 7) + 1) - 1;
+      periodIndex = Math.floor((itemDate.getDate() - 1) / 7);
     } else if (period === "month") {
       if (itemDate.getFullYear() !== latestYear) {
         return;
@@ -1098,7 +1099,8 @@ function buildFinanceChartRows(transactions, period) {
     }
 
     const amount = Number(item.amount ?? 0);
-    if (item.type === "income" && String(item.category ?? "").toLowerCase() === "denda") {
+    if (!Number.isFinite(amount)) return;
+    if (item.type === "income" && String(item.category ?? "").trim().toLowerCase() === "denda") {
       rows[periodIndex].fine += amount;
     } else if (item.type === "income") {
       rows[periodIndex].regularIncome += amount;
@@ -1258,7 +1260,7 @@ export default function App() {
   const [fineChartPeriod, setFineChartPeriod] = useState("month");
   const [fineChartType, setFineChartType] = useState("line");
   const [fineChartClassFilter, setFineChartClassFilter] = useState("all");
-  const [dashboardChartPeriod, setDashboardChartPeriod] = useState("month");
+  const [dashboardChartPeriod, setDashboardChartPeriod] = useState("week");
   const [expenseFilter, setExpenseFilter] = useState("Semua");
   const [balanceFilter, setBalanceFilter] = useState("Semua");
   const [reportFilters, setReportFilters] = useState({
@@ -3171,42 +3173,8 @@ export default function App() {
               />
             </div>
 
-            <div className="grid-2 treasurer-dashboard-grid">
-              <div className="panel">
-                <div className="panel-header">
-                  <div className="panel-title">Grafik Kas per Kelas</div>
-                  <div className="panel-actions">
-                    <select
-                      className="form-select dashboard-period-select"
-                      value={dashboardChartPeriod}
-                      onChange={(event) => setDashboardChartPeriod(event.target.value)}
-                    >
-                      <option value="week">Mingguan</option>
-                      <option value="month">Bulanan</option>
-                      <option value="year">Tahunan</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="panel-body">
-                  {dashboardChartRows.length === 0 ? (
-                    <div className="empty-state">
-                      <i className="fas fa-chart-column" />
-                      <p>Belum ada data kas per kelas.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="chart-period-note">
-                        {dashboardChartPeriod === "week"
-                          ? "Menampilkan transaksi minggu terakhir."
-                          : dashboardChartPeriod === "month"
-                            ? "Menampilkan transaksi bulan terakhir."
-                            : "Menampilkan transaksi tahun terakhir."}
-                      </div>
-                      <ClassFinanceComparisonChart rows={dashboardChartRows} />
-                    </>
-                  )}
-                </div>
-              </div>
+            <div className="grid-2 treasurer-dashboard-grid dashboard-distribution-row">
+              <CashDistributionChart rows={buildFinanceChartRows(transactions, dashboardChartPeriod)} />
 
               <div className="panel">
                 <div className="panel-header">
@@ -3240,6 +3208,13 @@ export default function App() {
                 </div>
               </div>
             </div>
+            <FinanceChart
+              title="Diagram Keuangan Semua Kelas"
+              rows={buildFinanceChartRows(transactions, dashboardChartPeriod)}
+              period={dashboardChartPeriod}
+              onPeriodChange={setDashboardChartPeriod}
+              showDistribution={false}
+            />
           </section>
 
           <section className={`page-section ${activePage === "users" ? "active" : ""}`}>
@@ -5570,42 +5545,117 @@ function ClassFinanceComparisonChart({ rows = [] }) {
   );
 }
 
-function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], period = "week", onPeriodChange }) {
-  const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
-  const safeRows = rows.map((row) => ({
-    ...row,
-    ...Object.fromEntries(series.map((item) => [item.key, Math.max(0, Number(row[item.key] ?? 0))]))
-  }));
-  const allValues = safeRows.flatMap((row) => series.map((item) => Number(row[item.key] ?? 0)));
-  const maxValue = Math.max(1, ...allValues);
-  const totalValue = safeRows.reduce(
-    (sum, row) => sum + series.reduce((seriesSum, item) => seriesSum + Number(row[item.key] ?? 0), 0),
-    0
+function CashDistributionChart({ rows }) {
+  const [shape, setShape] = useState("donut");
+  const segments = [
+    { label: "Pemasukan", color: "#10b981", key: "regularIncome" },
+    { label: "Denda", color: "#f97316", key: "fine" },
+    { label: "Pengeluaran", color: "#ef4444", key: "expense" }
+  ].map((item) => ({ ...item, value: rows.reduce((sum, row) => sum + Math.max(0, Number(row[item.key]) || 0), 0) }));
+  const total = segments.reduce((sum, item) => sum + item.value, 0);
+  const incoming = segments[0].value + segments[1].value;
+  let angle = -90;
+  const visibleSegments = segments.filter((item) => item.value > 0);
+  return (
+    <section className="panel cash-distribution-panel" aria-label="Distribusi Kas">
+      <div className="cash-chart-header">
+        <h3>Distribusi Kas <i className="fas fa-money-bill-wave" aria-hidden="true" /></h3>
+        <label className="cash-chart-select">Bentuk diagram
+          <select value={shape} onChange={(event) => setShape(event.target.value)}>
+            <option value="donut">Donat</option><option value="pie">Lingkaran</option><option value="bar">Batang</option>
+          </select>
+        </label>
+      </div>
+      {shape === "bar" ? <div className="cash-distribution-bars">
+        {segments.map((item) => <div key={item.key}>
+          <span>{item.label}<strong>{formatCurrency(item.value)}</strong></span>
+          <div className="cash-distribution-track"><div style={{ width: `${item.value / Math.max(1, ...segments.map((segment) => segment.value)) * 100}%`, background: item.color }} /></div>
+        </div>)}
+      </div> :
+      <div className="cash-distribution-ring">
+        <svg viewBox="0 0 260 260" role="img" aria-label={segments.map((item) => `${item.label}: ${formatCurrency(item.value)}`).join(", ")}>
+          <circle cx="130" cy="130" r={shape === "pie" ? 56 : 98} fill="none" stroke="#ecfdf5" strokeWidth={shape === "pie" ? 112 : 30} />
+          {visibleSegments.map((item) => {
+            const sweep = item.value / total * 360;
+            const start = angle;
+            angle += sweep;
+            const gap = Math.min(5, sweep * 0.3);
+            const length = 2 * Math.PI * (shape === "pie" ? 56 : 98);
+            return <circle key={item.key} cx="130" cy="130" r={shape === "pie" ? 56 : 98} fill="none" stroke={item.color}
+              strokeWidth={shape === "pie" ? 112 : 30} strokeLinecap="butt" strokeDasharray={`${length * (sweep - (visibleSegments.length > 1 ? gap : 0)) / 360} ${length}`}
+              transform={`rotate(${start + gap / 2} 130 130)`}>
+              <title>{item.label}: {formatCurrency(item.value)}</title>
+            </circle>;
+          })}
+        </svg>
+        <div className={`cash-distribution-total ${shape === "pie" ? "cash-distribution-total-pie" : ""}`}>
+          <strong>{formatShortCurrency(incoming)}</strong><span>Total Kas Masuk</span>
+        </div>
+      </div>}
+      {total === 0 ? <p className="cash-distribution-empty">Belum ada data transaksi.</p> : null}
+      <div className="cash-distribution-legend">
+        {segments.map((item) => <span key={item.key} title={formatCurrency(item.value)}><i style={{ background: item.color }} />{item.label}<strong>{formatCurrency(item.value)}</strong></span>)}
+      </div>
+    </section>
   );
+}
+
+function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], period = "week", onPeriodChange, showDistribution = true }) {
+  const [activeTooltipIndex, setActiveTooltipIndex] = useState(null);
+  const [chartShape, setChartShape] = useState("area");
+  const chartStageRef = useRef(null);
+  const [chartWidth, setChartWidth] = useState(720);
+  useEffect(() => {
+    const stage = chartStageRef.current;
+    if (!stage) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setChartWidth(Math.max(320, entry.contentRect.width));
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [rows]);
+  const safeRows = rows.map((row) => {
+    const income = Math.max(0, Number(row.regularIncome) || 0);
+    const expense = Math.max(0, Number(row.expense ?? 0));
+
+    return {
+      ...row,
+      income,
+      expense
+    };
+  });
+  const chartRows = safeRows.map((row) => {
+    return {
+      ...row,
+      fine: Math.max(0, Number(row.fine) || 0)
+    };
+  });
+  const allValues = chartRows.flatMap((row) => [row.income, row.expense, row.fine]);
+  const maxRawValue = Math.max(1, ...allValues);
+  const scaleMagnitude = 10 ** Math.floor(Math.log10(maxRawValue / 5));
+  const chartStepBase = [1, 2, 5, 10].find((step) => step * scaleMagnitude >= maxRawValue / 5) * scaleMagnitude;
+  const maxValue = Math.max(1, Math.ceil(maxRawValue / chartStepBase) * chartStepBase);
   const hasData = allValues.some((value) => value > 0);
-  const chartWidth = 720;
-  const chartHeight = 280;
+  const chartHeight = 340;
   const paddingLeft = 76;
   const paddingRight = 28;
   const paddingTop = 34;
   const paddingBottom = 42;
   const chartInnerWidth = chartWidth - paddingLeft - paddingRight;
   const chartInnerHeight = chartHeight - paddingTop - paddingBottom;
-  const seriesLines = series.map((item) => {
-    const points = safeRows.map((row, index) => {
-      const count = Math.max(1, safeRows.length - 1);
-      const x = paddingLeft + (index / count) * chartInnerWidth;
-      const value = Number(row[item.key] ?? 0);
-      const y = chartHeight - paddingBottom - (value / maxValue) * chartInnerHeight;
-
-      return { x, y, value, label: row.label };
-    });
-
-    return {
-      ...item,
-      points
-    };
-  });
+  const legendItems = [
+    { key: "income", label: "Pemasukan", color: "green", hex: "#10b981" },
+    { key: "fine", label: "Denda", color: "orange", hex: "#f97316" },
+    { key: "expense", label: "Pengeluaran", color: "red", hex: "#ef4444" }
+  ];
+  const getY = (value) => chartHeight - paddingBottom - (Math.max(0, Number(value || 0)) / maxValue) * chartInnerHeight;
+  const getX = (index) => {
+    if (chartShape !== "bar" && chartShape !== "mixed" && chartRows.length > 1) {
+      return paddingLeft + chartInnerWidth * index / (chartRows.length - 1);
+    }
+    const slotWidth = chartInnerWidth / Math.max(1, chartRows.length);
+    return paddingLeft + slotWidth * index + slotWidth / 2;
+  };
   const yTicks = Array.from({ length: 5 }, (_, index) => {
     const ratio = index / 4;
     return {
@@ -5616,36 +5666,40 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
   const tooltipSeries =
     activeTooltipIndex === null
       ? []
-      : seriesLines.map((item) => ({
-          label: item.label,
-          color:
-            item.color === "green"
-              ? "#20c997"
-              : item.color === "yellow"
-                ? "#ffb84d"
-                : item.color === "red"
-                  ? "#ff6264"
-                  : "#5b9bd5",
-          value: Number(item.points[activeTooltipIndex]?.value ?? 0)
-        }));
+      : [
+          { label: "Pemasukan", color: "#10b981", value: Number(chartRows[activeTooltipIndex]?.income ?? 0) },
+          { label: "Denda", color: "#f97316", value: Number(chartRows[activeTooltipIndex]?.fine ?? 0) },
+          { label: "Pengeluaran", color: "#ef4444", value: Number(chartRows[activeTooltipIndex]?.expense ?? 0) }
+        ];
   const tooltipAnchor =
     activeTooltipIndex === null
       ? null
       : {
-          x: seriesLines[0]?.points[activeTooltipIndex]?.x ?? paddingLeft,
-          y: Math.min(...seriesLines.map((item) => item.points[activeTooltipIndex]?.y ?? chartHeight / 2)),
-          label: safeRows[activeTooltipIndex]?.label ?? "-"
+          x: getX(activeTooltipIndex),
+          y: getY(Math.max(...tooltipSeries.map((item) => item.value))),
+          label: chartRows[activeTooltipIndex]?.label ?? "-"
         };
 
   return (
+    <>
+    {showDistribution ? <CashDistributionChart rows={rows} /> : null}
     <div className="panel finance-chart-panel">
       <div className="panel-header">
-        <div className="panel-title">{title}</div>
+        <div className="finance-chart-title">
+          <div className="panel-title">{title} <span aria-hidden="true">📊</span></div>
+          <p>Analisa perbandingan pemasukan, pengeluaran, dan denda</p>
+        </div>
+        <div className="cash-chart-controls">
+        <div className="cash-chart-balance"><span>Saldo Periode</span><strong>{formatCurrency(chartRows.reduce((sum, row) => sum + row.income + row.fine - row.expense, 0))}</strong></div>
+        <label className="cash-chart-select">Bentuk diagram
+          <select value={chartShape} onChange={(event) => { setChartShape(event.target.value); setActiveTooltipIndex(null); }}>
+            <option value="area">Area</option><option value="line">Garis</option><option value="bar">Batang</option><option value="mixed">Batang + Garis</option>
+          </select>
+        </label>
         <div className="filter-chips finance-period-tabs">
           {[
             ["week", "Mingguan"],
-            ["month", "Bulanan"],
-            ["year", "Tahunan"]
+            ["month", "Bulanan"]
           ].map(([value, label]) => (
             <button
               key={value}
@@ -5657,6 +5711,7 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
             </button>
           ))}
         </div>
+        </div>
       </div>
       <div className="panel-body">
         {!hasData ? (
@@ -5666,23 +5721,17 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
           </div>
         ) : (
           <div className="finance-graph-card finance-graph-card-line">
-            <div className="finance-graph-head">
-              <span>Total</span>
-              <strong>{formatCurrency(totalValue)}</strong>
-            </div>
-
             <div
+              ref={chartStageRef}
               className="finance-chart-stage"
               onClick={() => setActiveTooltipIndex(null)}
             >
               <svg className="finance-line-graph" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={title}>
                 <defs>
-                  {series.map((item) => (
-                    <linearGradient key={item.key} id={`financeArea-${period}-${item.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" className={`finance-area-stop-start ${item.color}`} />
-                      <stop offset="100%" className={`finance-area-stop-end ${item.color}`} />
-                    </linearGradient>
-                  ))}
+                  {legendItems.map((item) => <linearGradient key={item.key} id={`financeArea-${item.key}-${period}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={item.hex} stopOpacity="0.28" />
+                    <stop offset="100%" stopColor={item.hex} stopOpacity="0.02" />
+                  </linearGradient>)}
                 </defs>
                 {yTicks.map((tick) => (
                   <g key={tick.y}>
@@ -5693,46 +5742,43 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
                       x2={chartWidth - paddingRight}
                       y2={tick.y}
                     />
+                    <text className="finance-graph-y-label" x={paddingLeft - 16} y={tick.y + 4} textAnchor="end">
+                      {formatShortCurrency(tick.value)}
+                    </text>
                   </g>
                 ))}
                 <line className="finance-axis-line" x1={paddingLeft} y1={paddingTop} x2={paddingLeft} y2={chartHeight - paddingBottom} />
                 <line className="finance-axis-line" x1={paddingLeft} y1={chartHeight - paddingBottom} x2={chartWidth - paddingRight} y2={chartHeight - paddingBottom} />
-                {seriesLines.map((item) => {
-                  const linePoints = item.points.map((point) => `${point.x},${point.y}`).join(" ");
-                  const areaPoints = item.points.length
-                    ? `${paddingLeft},${chartHeight - paddingBottom} ${linePoints} ${chartWidth - paddingRight},${chartHeight - paddingBottom}`
-                    : "";
-
-                  return (
-                    <polygon
-                      key={`${item.key}-area`}
-                      className={`finance-graph-area ${item.color}`}
-                      points={areaPoints}
-                      style={{ fill: `url(#financeArea-${period}-${item.key})` }}
-                    />
-                  );
+                {legendItems.map((item, seriesIndex) => {
+                  const points = chartRows.map((row, index) => ({ x: getX(index), y: getY(row[item.key]) }));
+                  const linePath = points.map((point, index) => {
+                    if (index === 0) return `M ${point.x} ${point.y}`;
+                    const previous = points[index - 1];
+                    const middleX = (previous.x + point.x) / 2;
+                    return `C ${middleX} ${previous.y}, ${middleX} ${point.y}, ${point.x} ${point.y}`;
+                  }).join(" ");
+                  const bars = chartShape === "bar" || (chartShape === "mixed" && item.key !== "fine");
+                  const barWidth = Math.min(26, chartInnerWidth / Math.max(1, chartRows.length) * 0.18);
+                  return <g key={item.key}>
+                    {chartShape === "area" && points.length > 1 ? <path
+                      d={`${linePath} L ${points[points.length - 1].x} ${getY(0)} L ${points[0].x} ${getY(0)} Z`}
+                      fill={`url(#financeArea-${item.key}-${period})`} /> : null}
+                    {!bars ? <path d={linePath} fill="none" stroke={item.hex} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /> : null}
+                    {points.map((point, index) => bars ? <rect key={index}
+                      x={point.x + (seriesIndex - 1) * (barWidth + 4) - barWidth / 2} y={point.y}
+                      width={barWidth} height={getY(0) - point.y} rx="6" fill={item.hex} fillOpacity="0.75"
+                      onMouseEnter={() => setActiveTooltipIndex(index)} onMouseLeave={() => setActiveTooltipIndex(null)}
+                      onClick={(event) => { event.stopPropagation(); setActiveTooltipIndex(index); }}>
+                      <title>{chartRows[index].label} — {item.label}: {formatCurrency(chartRows[index][item.key])}</title>
+                    </rect> : <circle key={index} cx={point.x} cy={point.y} r="5" fill="#fff" stroke={item.hex} strokeWidth="2"
+                      tabIndex="0" aria-label={`${chartRows[index].label}, ${item.label}: ${formatCurrency(chartRows[index][item.key])}`}
+                      onFocus={() => setActiveTooltipIndex(index)} onBlur={() => setActiveTooltipIndex(null)}
+                      onMouseEnter={() => setActiveTooltipIndex(index)} onMouseLeave={() => setActiveTooltipIndex(null)}
+                      onClick={(event) => { event.stopPropagation(); setActiveTooltipIndex(index); }} />)}
+                  </g>;
                 })}
-                {seriesLines.map((item) => (
-                  <path key={`${item.key}-line`} className={`finance-graph-line ${item.color}`} d={createSmoothLinePath(item.points)} />
-                ))}
-                {seriesLines.map((item) =>
-                  item.points.map((point, index) => (
-                    <circle
-                      key={`${item.key}-${point.label}`}
-                      className={`finance-graph-dot ${item.color}`}
-                      cx={point.x}
-                      cy={point.y}
-                      r="4.5"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setActiveTooltipIndex((current) => (current === index ? null : index));
-                      }}
-                    />
-                  ))
-                )}
-                {safeRows.map((row, index) => {
-                  const count = Math.max(1, safeRows.length - 1);
-                  const x = paddingLeft + (index / count) * chartInnerWidth;
+                {chartRows.map((row, index) => {
+                  const x = getX(index);
                   return (
                     <text className="finance-graph-axis-label" key={row.label} x={x} y={chartHeight - 12} textAnchor="middle">
                       {row.label}
@@ -5763,10 +5809,10 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
             </div>
 
             <div className="finance-graph-labels">
-              {series.map((item) => (
+              {legendItems.map((item) => (
                 <div className="finance-graph-label" key={item.label}>
                   <span>
-                    <i className={`finance-mini-dot ${item.color}`} />
+                    <i className={`finance-mini-dot ${chartShape !== "bar" ? "line" : ""}`} style={{ background: item.hex }} />
                     {item.label}
                   </span>
                 </div>
@@ -5776,6 +5822,7 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
         )}
       </div>
     </div>
+    </>
   );
 }
 
