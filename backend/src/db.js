@@ -160,6 +160,8 @@ export async function initializeDatabase() {
       payment_cycle VARCHAR(20) NOT NULL CHECK (payment_cycle IN ('mingguan', 'bulanan')),
       nominal INTEGER NOT NULL CHECK (nominal >= 0),
       payment_day VARCHAR(20) NOT NULL DEFAULT 'Senin',
+      notification_day VARCHAR(20) NOT NULL DEFAULT 'Senin',
+      notification_hour INTEGER NOT NULL DEFAULT 8 CHECK (notification_hour >= 0 AND notification_hour <= 23),
       notify_unpaid BOOLEAN NOT NULL DEFAULT TRUE,
       allow_late_payment BOOLEAN NOT NULL DEFAULT TRUE,
       auto_report BOOLEAN NOT NULL DEFAULT TRUE,
@@ -170,6 +172,19 @@ export async function initializeDatabase() {
 
     ALTER TABLE pengaturan_kas
     ADD COLUMN IF NOT EXISTS payment_day VARCHAR(20) NOT NULL DEFAULT 'Senin';
+
+    ALTER TABLE pengaturan_kas
+    ADD COLUMN IF NOT EXISTS notification_day VARCHAR(20) NOT NULL DEFAULT 'Senin';
+
+    ALTER TABLE pengaturan_kas
+    ADD COLUMN IF NOT EXISTS notification_hour INTEGER NOT NULL DEFAULT 8;
+
+    ALTER TABLE pengaturan_kas
+    DROP CONSTRAINT IF EXISTS pengaturan_kas_notification_hour_check;
+
+    ALTER TABLE pengaturan_kas
+    ADD CONSTRAINT pengaturan_kas_notification_hour_check
+    CHECK (notification_hour >= 0 AND notification_hour <= 23);
 
     ALTER TABLE pengaturan_kas
     ADD COLUMN IF NOT EXISTS notify_unpaid BOOLEAN NOT NULL DEFAULT TRUE;
@@ -404,6 +419,8 @@ export async function initializeDatabase() {
       payment_cycle,
       nominal,
       payment_day,
+      notification_day,
+      notification_hour,
       notify_unpaid,
       allow_late_payment,
       auto_report,
@@ -411,7 +428,7 @@ export async function initializeDatabase() {
       fine_amount,
       updated_at
     )
-    VALUES (1, 'bulanan', 50000, 'Senin', TRUE, TRUE, TRUE, FALSE, 0, NOW())
+    VALUES (1, 'bulanan', 50000, 'Senin', 'Senin', 8, TRUE, TRUE, TRUE, FALSE, 0, NOW())
     ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO pengaturan_aplikasi (

@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { config } from "./config.js";
 import { getDatabaseInfo, initializeDatabase, pool } from "./db.js";
+import { emailConfigured, initializeEmailReminders, startEmailReminders } from "./email-reminders.js";
 
 const app = express();
 const passwordSalt = "kas-superadmin-salt";
@@ -866,6 +867,8 @@ async function mergeSystemBackup(payload) {
             payment_cycle,
             nominal,
             payment_day,
+            notification_day,
+            notification_hour,
             notify_unpaid,
             allow_late_payment,
             auto_report,
@@ -880,12 +883,14 @@ async function mergeSystemBackup(payload) {
             deleted_by_name,
             deleted_by_ip
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamp, NOW()), COALESCE($11::timestamp, NOW()), $12, $13, $14, $15, $16, $17)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12::timestamp, NOW()), COALESCE($13::timestamp, NOW()), $14, $15, $16, $17, $18, $19)
           ON CONFLICT (id) DO UPDATE
           SET
             payment_cycle = EXCLUDED.payment_cycle,
             nominal = EXCLUDED.nominal,
             payment_day = EXCLUDED.payment_day,
+            notification_day = EXCLUDED.notification_day,
+            notification_hour = EXCLUDED.notification_hour,
             notify_unpaid = EXCLUDED.notify_unpaid,
             allow_late_payment = EXCLUDED.allow_late_payment,
             auto_report = EXCLUDED.auto_report,
@@ -904,6 +909,8 @@ async function mergeSystemBackup(payload) {
           item.payment_cycle ?? "mingguan",
           Number(item.nominal ?? 0),
           item.payment_day ?? "Senin",
+          item.notification_day ?? item.payment_day ?? "Senin",
+          Math.min(23, Math.max(0, Number.parseInt(item.notification_hour ?? 8, 10) || 8)),
           Boolean(item.notify_unpaid),
           Boolean(item.allow_late_payment),
           Boolean(item.auto_report),
@@ -2920,7 +2927,7 @@ app.patch(
 app.get("/api/cash-settings", requireSuperadmin, async (_request, response) => {
   try {
     const result = await pool.query('SELECT * FROM pengaturan_kas WHERE id = 1 AND COALESCE("delete", 0) = 0');
-    response.json(result.rows[0]);
+    response.json({ ...result.rows[0], email_reminders_ready: emailConfigured() });
   } catch (error) {
     response.status(500).json({
       message: "Gagal mengambil pengaturan kas",
@@ -2935,10 +2942,13 @@ app.put("/api/cash-settings", requireSuperadmin, async (request, response) => {
       paymentCycle,
       nominal = 0,
       paymentDay = "Senin",
+      notificationDay = paymentDay,
+      notificationHour = 8,
       notifyUnpaid = true,
       allowLatePayment = true,
       autoReport = true
     } = request.body;
+    const normalizedNotificationHour = Math.min(23, Math.max(0, Number.parseInt(notificationHour, 10) || 8));
     const result = await pool.query(
       `
         INSERT INTO pengaturan_kas (
@@ -2946,6 +2956,8 @@ app.put("/api/cash-settings", requireSuperadmin, async (request, response) => {
           payment_cycle,
           nominal,
           payment_day,
+          notification_day,
+          notification_hour,
           notify_unpaid,
           allow_late_payment,
           auto_report,
@@ -2953,12 +2965,14 @@ app.put("/api/cash-settings", requireSuperadmin, async (request, response) => {
           fine_amount,
           updated_at
         )
-        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           payment_cycle = EXCLUDED.payment_cycle,
           nominal = EXCLUDED.nominal,
           payment_day = EXCLUDED.payment_day,
+          notification_day = EXCLUDED.notification_day,
+          notification_hour = EXCLUDED.notification_hour,
           notify_unpaid = EXCLUDED.notify_unpaid,
           allow_late_payment = EXCLUDED.allow_late_payment,
           auto_report = EXCLUDED.auto_report,
@@ -2973,7 +2987,18 @@ app.put("/api/cash-settings", requireSuperadmin, async (request, response) => {
           updated_at = NOW()
         RETURNING *
       `,
-      [paymentCycle, nominal, paymentDay, notifyUnpaid, allowLatePayment, autoReport, false, 0]
+      [
+        paymentCycle,
+        nominal,
+        paymentDay,
+        notificationDay,
+        normalizedNotificationHour,
+        notifyUnpaid,
+        allowLatePayment,
+        autoReport,
+        false,
+        0
+      ]
     );
 
     response.json(result.rows[0]);
@@ -3438,6 +3463,8 @@ app.use(handleApiError);
 
 async function startServer() {
   await initializeDatabase();
+  await initializeEmailReminders(pool);
+  startEmailReminders(pool);
   app.listen(config.port, () => {
     console.log(`Kas backend berjalan di port ${config.port}`);
   });

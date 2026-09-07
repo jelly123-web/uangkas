@@ -24,6 +24,11 @@ services:
     environment:
       PORT: 5000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/kas
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - ./backend:/app
       - /app/node_modules

@@ -392,6 +392,9 @@ const months = [
   { value: "12", label: "Desember" }
 ];
 
+const notificationDays = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+const notificationHours = Array.from({ length: 24 }, (_, hour) => hour);
+
 const expenseCategories = ["Semua", "Kebersihan", "Konsumsi", "Perlengkapan", "Kegiatan", "Sosial", "Lainnya"];
 const loginSparkles = [
   { left: "8%", top: "14%", size: 12, delay: "-1.2s", duration: "6s", color: "rgba(59,181,160,0.72)" },
@@ -1248,7 +1251,9 @@ export default function App() {
   const [classYearFilter, setClassYearFilter] = useState("semua");
   const [cashForm, setCashForm] = useState({
     paymentCycle: "mingguan",
-    paymentDay: "Senin"
+    paymentDay: "Senin",
+    notificationDay: "Senin",
+    notificationHour: 8
   });
   const [settingToggles, setSettingToggles] = useState({
     notif: true,
@@ -1313,6 +1318,7 @@ export default function App() {
   const [appSettings, setAppSettings] = useState(initialStoredAppSettings);
   const backupFileInputRef = useRef(null);
   const reportFilterAutoInitRef = useRef(false);
+  const cashFormDirtyRef = useRef(false);
 
   function showToast(message, type = "success") {
     setToast({ message, type, id: Date.now() });
@@ -1844,10 +1850,14 @@ export default function App() {
         monitoring
       });
 
-      setCashForm({
-        paymentCycle: settings?.payment_cycle ?? "mingguan",
-        paymentDay: settings?.payment_day ?? "Senin"
-      });
+      if (!cashFormDirtyRef.current) {
+        setCashForm({
+          paymentCycle: settings?.payment_cycle ?? "mingguan",
+          paymentDay: settings?.payment_day ?? "Senin",
+          notificationDay: settings?.notification_day ?? settings?.payment_day ?? "Senin",
+          notificationHour: Number(settings?.notification_hour ?? 8)
+        });
+      }
       setSettingToggles({
         notif: settings?.notify_unpaid ?? true,
         late: settings?.allow_late_payment ?? true,
@@ -2208,15 +2218,24 @@ export default function App() {
 
   async function saveCashSettings(message, togglesOverride = settingToggles) {
     try {
-      await apiFetch("/api/cash-settings", {
+      const savedSettings = await apiFetch("/api/cash-settings", {
         method: "PUT",
         body: JSON.stringify({
           paymentCycle: cashForm.paymentCycle,
           paymentDay: cashForm.paymentDay,
+          notificationDay: cashForm.notificationDay,
+          notificationHour: cashForm.notificationHour,
           notifyUnpaid: togglesOverride.notif,
           allowLatePayment: togglesOverride.late,
           autoReport: togglesOverride.autoReport
         })
+      });
+      cashFormDirtyRef.current = false;
+      setCashForm({
+        paymentCycle: savedSettings?.payment_cycle ?? "mingguan",
+        paymentDay: savedSettings?.payment_day ?? "Senin",
+        notificationDay: savedSettings?.notification_day ?? savedSettings?.payment_day ?? "Senin",
+        notificationHour: Number(savedSettings?.notification_hour ?? 8)
       });
       await loadDashboard();
       showToast(message);
@@ -2232,7 +2251,7 @@ export default function App() {
 
   async function handleSavePeriod(event) {
     event.preventDefault();
-    await saveCashSettings("Periode pembayaran berhasil disimpan.");
+    await saveCashSettings("Jadwal notifikasi berhasil disimpan.");
   }
 
   async function handleAppLogoChange(event) {
@@ -3730,7 +3749,7 @@ export default function App() {
           <section className={`page-section ${activePage === "settings" ? "active" : ""}`}>
             <div className="grid-2">
               <div>
-                <div className="setting-card">
+                <div className="setting-card settings-top-card">
                   <div className="setting-card-header">
                     <div className="setting-card-icon green-box">
                       <i className="fas fa-coins" />
@@ -3768,59 +3787,62 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="setting-card">
+                <div className="setting-card settings-bottom-card">
                   <div className="setting-card-header">
                     <div className="setting-card-icon orange-box">
                       <i className="fas fa-calendar-days" />
                     </div>
                     <div>
-                      <div className="setting-card-title">Periode Pembayaran</div>
-                      <div className="setting-card-desc">Atur jenis dan jadwal periode</div>
+                      <div className="setting-card-title">Jadwal Notifikasi</div>
+                      <div className="setting-card-desc">Atur hari dan jam email pengingat</div>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Jenis periode</label>
+                    <label className="form-label">Hari notifikasi</label>
                     <select
                       className="form-select"
-                      value={cashForm.paymentCycle}
-                      onChange={(event) =>
+                      value={cashForm.notificationDay}
+                      onChange={(event) => {
+                        cashFormDirtyRef.current = true;
                         setCashForm((current) => ({
                           ...current,
-                          paymentCycle: event.target.value
-                        }))
-                      }
+                          notificationDay: event.target.value
+                        }));
+                      }}
                     >
-                      <option value="mingguan">Mingguan</option>
-                      <option value="bulanan">Bulanan</option>
+                      {notificationDays.map((day) => (
+                        <option key={`notification-day-${day}`} value={day}>{day}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Hari pembayaran</label>
+                    <label className="form-label">Jam notifikasi</label>
                     <select
                       className="form-select"
-                      value={cashForm.paymentDay}
-                      onChange={(event) =>
+                      value={cashForm.notificationHour}
+                      onChange={(event) => {
+                        cashFormDirtyRef.current = true;
                         setCashForm((current) => ({
                           ...current,
-                          paymentDay: event.target.value
-                        }))
-                      }
+                          notificationHour: Number(event.target.value)
+                        }));
+                      }}
                     >
-                      <option>Senin</option>
-                      <option>Selasa</option>
-                      <option>Rabu</option>
-                      <option>Kamis</option>
-                      <option>Jumat</option>
+                      {notificationHours.map((hour) => (
+                        <option key={`notification-hour-${hour}`} value={hour}>
+                          {String(hour).padStart(2, "0")}.00 WIB
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <button className="btn btn-primary" onClick={handleSavePeriod}>
-                    <i className="fas fa-check" /> Simpan Periode
+                  <button className="btn btn-primary notification-save-btn" onClick={handleSavePeriod}>
+                    <i className="fas fa-check" /> Simpan Jadwal
                   </button>
                 </div>
               </div>
 
               <div>
-                <div className="setting-card">
+                <div className="setting-card settings-top-card">
                   <div className="setting-card-header">
                     <div className="setting-card-icon blue-box">
                       <i className="fas fa-gear" />
@@ -3831,7 +3853,13 @@ export default function App() {
                     </div>
                   </div>
                   {[
-                    ["notif", "Notifikasi Belum Bayar", "Kirim pengingat otomatis"],
+                    [
+                      "notif",
+                      "Notifikasi Belum Bayar",
+                      dashboard.settings?.email_reminders_ready
+                        ? `Email setiap ${cashForm.notificationDay}, pukul ${String(cashForm.notificationHour).padStart(2, "0")}.00 WIB`
+                        : "Email belum aktif - konfigurasi pengirim diperlukan"
+                    ],
                     ["late", "Izinkan Pembayaran Tertunda", "Bayar minggu sebelumnya"],
                     ["autoReport", "Laporan Otomatis", "Generate akhir bulan"]
                   ].map(([key, title, desc]) => (
@@ -3856,7 +3884,7 @@ export default function App() {
                   ))}
                 </div>
 
-                <div className="setting-card">
+                <div className="setting-card settings-bottom-card">
                   <div className="setting-card-header">
                     <div className="setting-card-icon purple-box">
                       <i className="fas fa-eye" />
@@ -3872,8 +3900,8 @@ export default function App() {
                       <strong>Per kelas</strong>
                     </div>
                     <div className="summary-row">
-                      <span>Hari pembayaran</span>
-                      <strong>{cashForm.paymentDay}</strong>
+                      <span>Jadwal notifikasi</span>
+                      <strong>{cashForm.notificationDay}, {String(cashForm.notificationHour).padStart(2, "0")}.00 WIB</strong>
                     </div>
                     <div className="summary-row">
                       <span>Tahun ajaran aktif</span>
@@ -5827,6 +5855,7 @@ function FinanceChart({ title = "Diagram Keuangan", rows = [], series = [], peri
 }
 
 function StudentPanel({ session, setSession, handleLogout, activePage, setActivePage, appSettings }) {
+  const [historyPage, setHistoryPage] = useState(1);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -6241,6 +6270,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
   const transactions = data.transactions ?? [];
   const statusLabel = overview.status === "lunas" ? "Lunas" : "Belum Bayar";
   const statusClass = overview.status === "lunas" ? "status-lunas" : "status-belum";
+  const historyPagination = paginateItems(transactions, historyPage, 10);
   const studentFinanceChartRows = buildFinanceChartRows(transactions, financeChartPeriod);
   const studentPaymentRows = useMemo(() => {
     if (!data.student) {
@@ -6379,7 +6409,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
               <StatCard color="blue" icon="fa-circle-check" value={statusLabel} label="Status Pembayaran" />
             </div>
 
-            <div className="grid-3-1">
+            <div className="grid-3-1 treasurer-balance-grid">
               <div className="saldo-card treasurer-balance-card">
                 <div className="saldo-label">Ringkasan Kas {data.classInfo?.name ?? "Siswa"}</div>
                 <div className="saldo-amount">{formatCurrency(overview.paid_cash ?? 0)}</div>
@@ -6458,33 +6488,18 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
               </div>
               <div className="panel-body">
                 <div className="student-payment-status-layout">
-                  <div className="student-payment-status-top">
-                    <div className="student-status-hero">
-                      <div className="student-status-hero-label">Status pembayaran saat ini</div>
-                      <div className="student-status-hero-value">{statusLabel}</div>
-                      <div className="student-status-hero-meta">
-                        <span>{formatAcademicYearLabel(data.classInfo?.academic_year_name)}</span>
-                        <span>{data.classInfo?.name ?? "-"}</span>
-                      </div>
+                  <div className="student-payment-report-layout">
+                    <div className="student-payment-report-heading">
+                      <h2>STATUS PEMBAYARAN SAAT INI</h2>
+                      <strong>{statusLabel}</strong>
+                      <p>TA {formatAcademicYearLabel(data.classInfo?.academic_year_name)} · {data.classInfo?.name ?? "-"}</p>
                     </div>
 
-                    <div className="student-payment-mini-grid">
-                      <div className="student-payment-mini-card">
-                        <span>Nominal kas</span>
-                        <strong>{formatCurrency(overview.nominal ?? 0)}</strong>
-                      </div>
-                      <div className="student-payment-mini-card">
-                        <span>Total dibayar bulan ini</span>
-                        <strong>{formatCurrency(selectedMonthTotalPaid)}</strong>
-                      </div>
-                      <div className="student-payment-mini-card">
-                        <span>Bulan lunas</span>
-                        <strong>{paidMonthsCount} bulan</strong>
-                      </div>
-                      <div className="student-payment-mini-card warning">
-                        <span>Belum bayar</span>
-                        <strong>{unpaidMonthsCount} bulan</strong>
-                      </div>
+                    <div className="student-payment-report-stats">
+                      <SimpleStat value={formatCurrency(overview.nominal ?? 0)} label="Nominal kas" />
+                      <SimpleStat value={formatCurrency(selectedMonthTotalPaid)} label="Total dibayar bulan ini" />
+                      <SimpleStat value={`${paidMonthsCount} bulan`} label="Bulan lunas" />
+                      <SimpleStat value={`${unpaidMonthsCount} bulan`} label="Belum bayar" />
                     </div>
                   </div>
 
@@ -6591,7 +6606,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                           </td>
                         </tr>
                       ) : (
-                        transactions.map((item) => (
+                        historyPagination.rows.map((item) => (
                           <tr key={item.id}>
                             <td>{formatDateLabel(item.created_at)}</td>
                             <td>{item.title}</td>
@@ -6611,6 +6626,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                   </table>
                 </div>
               </div>
+              <PaginationControls page={historyPagination.page} totalPages={historyPagination.totalPages} onChange={setHistoryPage} />
             </div>
           </section>
 
@@ -6844,6 +6860,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
 }
 
 function TreasurerPanel({ session, setSession, handleLogout, activePage, setActivePage, appSettings }) {
+  const [historyPage, setHistoryPage] = useState(1);
   const isHomeroom = session.auth?.role === "walikelas";
   const roleLabel = isHomeroom ? "Wali Kelas" : "Bendahara";
   const pageGroupsForRole = isHomeroom ? homeroomPageGroups : treasurerPageGroups;
@@ -7408,6 +7425,7 @@ async function handleSaveStudent(event) {
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id - a.id);
   const expenseRows = transactions.filter((item) => item.type === "expense");
+  const historyPagination = paginateItems(transactions, historyPage, 10);
   const classFinanceChartRows = buildFinanceChartRows(transactions, financeChartPeriod);
   const classFinanceChartSeries = [
     { key: "regularIncome", label: "Pemasukan Kas", color: "green" },
@@ -8290,7 +8308,7 @@ async function handleSaveStudent(event) {
                     <p>Belum ada riwayat transaksi.</p>
                   </div>
                 ) : (
-                  transactions.map((item) => (
+                  historyPagination.rows.map((item) => (
                     <div className="transaction-item" key={item.id}>
                       <div className={`transaction-icon ${item.type === "income" ? "income" : "expense"}`}>
                         <i className={`fas ${item.type === "income" ? "fa-arrow-trend-down" : "fa-arrow-trend-up"}`} />
@@ -8309,6 +8327,7 @@ async function handleSaveStudent(event) {
                   ))
                 )}
               </div>
+              <PaginationControls page={historyPagination.page} totalPages={historyPagination.totalPages} onChange={setHistoryPage} />
             </div>
           </section>
 
