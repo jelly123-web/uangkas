@@ -65,10 +65,12 @@ const defaultCredentials = {
 const defaultAppSettings = {
   appName: defaultAppName,
   logoImage: "",
+  logoOriginalImage: "",
   sidebarColor: "#fbfcfd",
   backgroundMode: "solid",
   backgroundColor: "#fcfdfd",
-  backgroundImage: ""
+  backgroundImage: "",
+  backgroundOriginalImage: ""
 };
 
 const validSessionRoles = new Set(["superadmin", "bendahara", "walikelas", "siswa"]);
@@ -107,6 +109,7 @@ function normalizeUserRecord(user, fallbackRole = "") {
 
   const fullName = user.fullName ?? user.full_name ?? "Pengguna";
   const profilePhoto = user.profilePhoto ?? user.profile_photo ?? "";
+  const profilePhotoOriginal = user.profilePhotoOriginal ?? user.profile_photo_original ?? profilePhoto;
 
   return {
     ...user,
@@ -115,7 +118,8 @@ function normalizeUserRecord(user, fallbackRole = "") {
     role: user.role ?? fallbackRole,
     classId: user.classId ?? user.class_id ?? null,
     className: user.className ?? user.class_name ?? null,
-    profilePhoto: profilePhoto || createGeneratedAvatar(fullName)
+    profilePhoto: profilePhoto || createGeneratedAvatar(fullName),
+    profilePhotoOriginal
   };
 }
 
@@ -1238,6 +1242,7 @@ export default function App() {
     email: "",
     password: "",
     profilePhoto: "",
+    profilePhotoOriginal: "",
     role: "siswa",
     classId: "",
     isActive: true
@@ -1299,7 +1304,8 @@ export default function App() {
     zoom: 1,
     minZoom: 1,
     panX: 0,
-    panY: 0
+    panY: 0,
+    originalSource: ""
   });
   const [cropDragging, setCropDragging] = useState(false);
   const cropDragRef = useRef({
@@ -1313,7 +1319,8 @@ export default function App() {
     fullName: "",
     email: "",
     password: "",
-    profilePhoto: ""
+    profilePhoto: "",
+    profilePhotoOriginal: ""
   });
   const [appSettings, setAppSettings] = useState(initialStoredAppSettings);
   const backupFileInputRef = useRef(null);
@@ -1415,14 +1422,19 @@ export default function App() {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
 
-  async function openCropper({ target, title, source, aspect = "square" }) {
+  async function openCropper({ target, title, source, aspect = "square", fit = "cover", originalSource = "" }) {
     try {
       const image = await loadImage(source);
       const dimensions = getCropperDimensions(aspect);
-      const minZoom = Math.max(
+      const coverZoom = Math.max(
         dimensions.viewportWidth / image.width,
         dimensions.viewportHeight / image.height
       );
+      const containZoom = Math.min(
+        dimensions.viewportWidth / image.width,
+        dimensions.viewportHeight / image.height
+      );
+      const minZoom = fit === "contain" ? containZoom : coverZoom;
 
       setCropperState({
         target,
@@ -1438,7 +1450,8 @@ export default function App() {
         zoom: minZoom,
         minZoom,
         panX: 0,
-        panY: 0
+        panY: 0,
+        originalSource: originalSource || source
       });
       setCropperOpen(true);
     } catch (error) {
@@ -1446,10 +1459,10 @@ export default function App() {
     }
   }
 
-  async function openCropperFromFile({ target, title, file, aspect = "square" }) {
+  async function openCropperFromFile({ target, title, file, aspect = "square", fit = "cover", originalSource = false }) {
     try {
       const source = await readImageFile(file);
-      await openCropper({ target, title, source, aspect });
+      await openCropper({ target, title, source, aspect, fit, originalSource: originalSource ? source : "" });
     } catch (error) {
       showToast(error.message || "Gagal membaca gambar.", "error");
     }
@@ -1648,10 +1661,12 @@ export default function App() {
         setAppSettings({
           appName: result.app_name ?? defaultAppSettings.appName,
           logoImage: result.logo_image ?? "",
+          logoOriginalImage: result.logo_original_image ?? result.logo_image ?? "",
           sidebarColor: result.sidebar_color ?? defaultAppSettings.sidebarColor,
           backgroundMode: result.background_mode ?? defaultAppSettings.backgroundMode,
           backgroundColor: result.background_color ?? defaultAppSettings.backgroundColor,
-          backgroundImage: result.background_image ?? ""
+          backgroundImage: result.background_image ?? "",
+          backgroundOriginalImage: result.background_original_image ?? result.background_image ?? ""
         });
       } catch {
         setAppSettings(defaultAppSettings);
@@ -1793,7 +1808,8 @@ export default function App() {
         fullName: session.user.fullName ?? "",
         email: session.user.email ?? "",
         password: "",
-        profilePhoto: session.user.profilePhoto ?? ""
+        profilePhoto: session.user.profilePhoto ?? "",
+        profilePhotoOriginal: session.user.profilePhotoOriginal ?? session.user.profilePhoto ?? ""
       });
     }
   }, [session]);
@@ -2035,6 +2051,7 @@ export default function App() {
         email: "",
         password: "",
         profilePhoto: "",
+        profilePhotoOriginal: "",
         role: "siswa",
         classId: "",
         isActive: true
@@ -2056,6 +2073,7 @@ export default function App() {
       email: "",
       password: "",
       profilePhoto: "",
+      profilePhotoOriginal: "",
       role: "siswa",
       classId: "",
       isActive: true
@@ -2071,6 +2089,7 @@ export default function App() {
       email: user.email ?? "",
       password: "",
       profilePhoto: user.profilePhoto ?? "",
+      profilePhotoOriginal: user.profilePhotoOriginal ?? user.profilePhoto ?? "",
       role: user.role ?? "siswa",
       classId: user.classId ? String(user.classId) : "",
       isActive: user.isActive ?? true
@@ -2265,7 +2284,8 @@ export default function App() {
         target: "appLogo",
         title: "Crop Logo Aplikasi",
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses logo.", "error");
@@ -2285,7 +2305,9 @@ export default function App() {
         target: "appBackground",
         title: "Crop Background Aplikasi",
         file,
-        aspect: "landscape"
+        aspect: "landscape",
+        fit: "contain",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses background.", "error");
@@ -2305,7 +2327,8 @@ export default function App() {
         target: "profilePhoto",
         title: "Crop Foto Profil",
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses foto.", "error");
@@ -2325,7 +2348,8 @@ export default function App() {
         target: "userFormProfilePhoto",
         title: "Crop Foto Akun",
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses foto akun.", "error");
@@ -2342,20 +2366,24 @@ export default function App() {
         body: JSON.stringify({
           appName: appSettings.appName,
           logoImage: appSettings.logoImage || null,
+          logoOriginalImage: appSettings.logoOriginalImage || appSettings.logoImage || null,
           sidebarColor: appSettings.sidebarColor,
           backgroundMode: appSettings.backgroundMode,
           backgroundColor: appSettings.backgroundColor,
-          backgroundImage: appSettings.backgroundImage || null
+          backgroundImage: appSettings.backgroundImage || null,
+          backgroundOriginalImage: appSettings.backgroundOriginalImage || appSettings.backgroundImage || null
         })
       });
 
       setAppSettings({
         appName: result.app_name ?? defaultAppSettings.appName,
         logoImage: result.logo_image ?? "",
+        logoOriginalImage: result.logo_original_image ?? result.logo_image ?? "",
         sidebarColor: result.sidebar_color ?? defaultAppSettings.sidebarColor,
         backgroundMode: result.background_mode ?? defaultAppSettings.backgroundMode,
         backgroundColor: result.background_color ?? defaultAppSettings.backgroundColor,
-        backgroundImage: result.background_image ?? ""
+        backgroundImage: result.background_image ?? "",
+        backgroundOriginalImage: result.background_original_image ?? result.background_image ?? ""
       });
       setAppSettingsOpen(false);
       showToast("Pengaturan aplikasi berhasil disimpan.");
@@ -2371,42 +2399,65 @@ export default function App() {
       canvas.width = cropperState.outputWidth;
       canvas.height = cropperState.outputHeight;
       const context = canvas.getContext("2d");
-      const renderedWidth = image.width * cropperState.zoom;
-      const renderedHeight = image.height * cropperState.zoom;
-      const left = (cropperState.viewportWidth - renderedWidth) / 2 + cropperState.panX;
-      const top = (cropperState.viewportHeight - renderedHeight) / 2 + cropperState.panY;
-      const srcX = Math.max(0, (0 - left) / cropperState.zoom);
-      const srcY = Math.max(0, (0 - top) / cropperState.zoom);
-      const srcWidth = Math.min(image.width, cropperState.viewportWidth / cropperState.zoom);
-      const srcHeight = Math.min(image.height, cropperState.viewportHeight / cropperState.zoom);
       const resultState = clampCropState(cropperState);
 
-      context.drawImage(
-        image,
-        srcX,
-        srcY,
-        srcWidth,
-        srcHeight,
-        0,
-        0,
-        resultState.outputWidth,
-        resultState.outputHeight
-      );
+      if (cropperState.target === "appBackground" && cropperState.zoom <= cropperState.minZoom + 0.0001) {
+        const scale = Math.min(resultState.outputWidth / image.width, resultState.outputHeight / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, resultState.outputWidth, resultState.outputHeight);
+        context.drawImage(image, (resultState.outputWidth - width) / 2, (resultState.outputHeight - height) / 2, width, height);
+      } else {
+        const renderedWidth = image.width * cropperState.zoom;
+        const renderedHeight = image.height * cropperState.zoom;
+        const left = (cropperState.viewportWidth - renderedWidth) / 2 + cropperState.panX;
+        const top = (cropperState.viewportHeight - renderedHeight) / 2 + cropperState.panY;
+        const srcX = Math.max(0, (0 - left) / cropperState.zoom);
+        const srcY = Math.max(0, (0 - top) / cropperState.zoom);
+        const srcWidth = Math.min(image.width, cropperState.viewportWidth / cropperState.zoom);
+        const srcHeight = Math.min(image.height, cropperState.viewportHeight / cropperState.zoom);
+
+        context.drawImage(
+          image,
+          srcX,
+          srcY,
+          srcWidth,
+          srcHeight,
+          0,
+          0,
+          resultState.outputWidth,
+          resultState.outputHeight
+        );
+      }
 
       const result = canvas.toDataURL("image/png");
 
       if (cropperState.target === "appLogo") {
-        setAppSettings((current) => ({ ...current, logoImage: result }));
+        setAppSettings((current) => ({
+          ...current,
+          logoImage: result,
+          logoOriginalImage: cropperState.originalSource || current.logoOriginalImage || cropperState.source
+        }));
       } else if (cropperState.target === "appBackground") {
         setAppSettings((current) => ({
           ...current,
           backgroundImage: result,
+          backgroundOriginalImage: cropperState.originalSource || current.backgroundOriginalImage || cropperState.source,
           backgroundMode: "image"
         }));
       } else if (cropperState.target === "profilePhoto") {
-        setProfileForm((current) => ({ ...current, profilePhoto: result }));
+        setProfileForm((current) => ({
+          ...current,
+          profilePhoto: result,
+          profilePhotoOriginal: cropperState.originalSource || current.profilePhotoOriginal || cropperState.source
+        }));
       } else if (cropperState.target === "userFormProfilePhoto") {
-        setUserForm((current) => ({ ...current, profilePhoto: result }));
+        setUserForm((current) => ({
+          ...current,
+          profilePhoto: result,
+          profilePhotoOriginal: cropperState.originalSource || current.profilePhotoOriginal || cropperState.source
+        }));
       }
 
       setCropperOpen(false);
@@ -2426,7 +2477,8 @@ export default function App() {
           fullName: profileForm.fullName,
           email: profileForm.email,
           password: profileForm.password,
-          profilePhoto: profileForm.profilePhoto
+          profilePhoto: profileForm.profilePhoto,
+          profilePhotoOriginal: profileForm.profilePhotoOriginal || profileForm.profilePhoto
         })
       });
 
@@ -2454,10 +2506,11 @@ export default function App() {
   const currentPage = allPages.find((item) => item.id === activePage) ?? allPages[0];
   const appShellStyle =
     appSettings.backgroundMode === "image" && appSettings.backgroundImage
-      ? {
+        ? {
           backgroundImage: `linear-gradient(rgba(252, 253, 253, 0.9), rgba(252, 253, 253, 0.92)), url(${appSettings.backgroundImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundSize: "100% auto",
+          backgroundPosition: "top center",
+          backgroundRepeat: "no-repeat",
           backgroundAttachment: "fixed"
         }
       : {
@@ -3859,9 +3912,7 @@ export default function App() {
                       dashboard.settings?.email_reminders_ready
                         ? `Email setiap ${cashForm.notificationDay}, pukul ${String(cashForm.notificationHour).padStart(2, "0")}.00 WIB`
                         : "Email belum aktif - konfigurasi pengirim diperlukan"
-                    ],
-                    ["late", "Izinkan Pembayaran Tertunda", "Bayar minggu sebelumnya"],
-                    ["autoReport", "Laporan Otomatis", "Generate akhir bulan"]
+                    ]
                   ].map(([key, title, desc]) => (
                     <div className="toggle-row" key={key}>
                       <div>
@@ -4405,7 +4456,38 @@ export default function App() {
               <div className="form-group">
                 <label className="form-label">Foto profil</label>
                 <div className="profile-photo-editor">
-                  <div className="profile-photo-large">
+                  <div
+                    className="profile-photo-large"
+                    role={userForm.profilePhoto ? "button" : undefined}
+                    tabIndex={userForm.profilePhoto ? 0 : undefined}
+                    onClick={() => {
+                      if (!userForm.profilePhoto) {
+                        return;
+                      }
+
+                      openCropper({
+                        target: "userFormProfilePhoto",
+                        title: "Crop Foto Akun",
+                        source: userForm.profilePhotoOriginal || userForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: userForm.profilePhotoOriginal || userForm.profilePhoto
+                      });
+                    }}
+                    onKeyDown={(event) => {
+                      if (!userForm.profilePhoto || (event.key !== "Enter" && event.key !== " ")) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      openCropper({
+                        target: "userFormProfilePhoto",
+                        title: "Crop Foto Akun",
+                        source: userForm.profilePhotoOriginal || userForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: userForm.profilePhotoOriginal || userForm.profilePhoto
+                      });
+                    }}
+                  >
                     {userForm.profilePhoto ? (
                       <img className="user-photo large" src={userForm.profilePhoto} alt={userForm.fullName || "Foto akun"} />
                     ) : (
@@ -4421,7 +4503,7 @@ export default function App() {
                       <button
                         className="btn btn-ghost"
                         type="button"
-                        onClick={() => setUserForm((current) => ({ ...current, profilePhoto: "" }))}
+                        onClick={() => setUserForm((current) => ({ ...current, profilePhoto: "", profilePhotoOriginal: "" }))}
                       >
                         Hapus
                       </button>
@@ -4730,7 +4812,8 @@ export default function App() {
                         onClick={() =>
                           setAppSettings((current) => ({
                             ...current,
-                            logoImage: ""
+                            logoImage: "",
+                            logoOriginalImage: ""
                           }))
                         }
                       >
@@ -4743,8 +4826,9 @@ export default function App() {
                           openCropper({
                             target: "appLogo",
                             title: "Crop Logo Aplikasi",
-                            source: appSettings.logoImage,
-                            aspect: "square"
+                            source: appSettings.logoOriginalImage || appSettings.logoImage,
+                            aspect: "square",
+                            originalSource: appSettings.logoOriginalImage || appSettings.logoImage
                           })
                         }
                       >
@@ -4788,6 +4872,7 @@ export default function App() {
                           setAppSettings((current) => ({
                             ...current,
                             backgroundImage: "",
+                            backgroundOriginalImage: "",
                             backgroundMode: "solid"
                           }))
                         }
@@ -4801,8 +4886,10 @@ export default function App() {
                           openCropper({
                             target: "appBackground",
                             title: "Crop Background Aplikasi",
-                            source: appSettings.backgroundImage,
-                            aspect: "landscape"
+                            source: appSettings.backgroundOriginalImage || appSettings.backgroundImage,
+                            aspect: "landscape",
+                            fit: "contain",
+                            originalSource: appSettings.backgroundOriginalImage || appSettings.backgroundImage
                           })
                         }
                       >
@@ -4835,8 +4922,9 @@ export default function App() {
                     appSettings.backgroundMode === "image" && appSettings.backgroundImage
                       ? {
                           backgroundImage: `linear-gradient(rgba(255,255,255,0.82), rgba(255,255,255,0.82)), url(${appSettings.backgroundImage})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center"
+                          backgroundSize: "100% auto",
+                          backgroundPosition: "top center",
+                          backgroundRepeat: "no-repeat"
                         }
                       : { background: appSettings.backgroundColor }
                   }
@@ -4888,7 +4976,8 @@ export default function App() {
                     onClick={() =>
                       setProfileForm((current) => ({
                         ...current,
-                        profilePhoto: ""
+                        profilePhoto: "",
+                        profilePhotoOriginal: ""
                       }))
                     }
                   >
@@ -4901,8 +4990,9 @@ export default function App() {
                       openCropper({
                         target: "profilePhoto",
                         title: "Crop Foto Profil",
-                        source: profileForm.profilePhoto,
-                        aspect: "square"
+                        source: profileForm.profilePhotoOriginal || profileForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: profileForm.profilePhotoOriginal || profileForm.profilePhoto
                       })
                     }
                   >
@@ -5876,7 +5966,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
     zoom: 1,
     minZoom: 1,
     panX: 0,
-    panY: 0
+    panY: 0,
+    originalSource: ""
   });
   const [cropDragging, setCropDragging] = useState(false);
   const cropDragRef = useRef({
@@ -5900,7 +5991,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
     fullName: session.user.fullName ?? "",
     email: session.user.email ?? "",
     password: "",
-    profilePhoto: session.user.profilePhoto ?? ""
+    profilePhoto: session.user.profilePhoto ?? "",
+    profilePhotoOriginal: session.user.profilePhotoOriginal ?? session.user.profilePhoto ?? ""
   });
 
   const allPages = studentPageGroups.flatMap((group) => group.items);
@@ -5914,10 +6006,11 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
 
   const appShellStyle =
     appSettings.backgroundMode === "image" && appSettings.backgroundImage
-      ? {
+        ? {
           backgroundImage: `linear-gradient(rgba(252, 253, 253, 0.9), rgba(252, 253, 253, 0.92)), url(${appSettings.backgroundImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundSize: "100% auto",
+          backgroundPosition: "top center",
+          backgroundRepeat: "no-repeat",
           backgroundAttachment: "fixed"
         }
       : {
@@ -5967,11 +6060,12 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
       fullName: session.user.fullName ?? "",
       email: session.user.email ?? "",
       password: "",
-      profilePhoto: session.user.profilePhoto ?? ""
+      profilePhoto: session.user.profilePhoto ?? "",
+      profilePhotoOriginal: session.user.profilePhotoOriginal ?? session.user.profilePhoto ?? ""
     });
   }, [session.user]);
 
-  async function openStudentCropper({ target, title, source, aspect = "square" }) {
+  async function openStudentCropper({ target, title, source, aspect = "square", originalSource = "" }) {
     try {
       const image = await loadImage(source);
       const dimensions = getCropperDimensions(aspect);
@@ -5994,7 +6088,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
         zoom: minZoom,
         minZoom,
         panX: 0,
-        panY: 0
+        panY: 0,
+        originalSource: originalSource || source
       });
       setCropperOpen(true);
     } catch (error) {
@@ -6002,10 +6097,10 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
     }
   }
 
-  async function openStudentCropperFromFile({ target, title, file, aspect = "square" }) {
+  async function openStudentCropperFromFile({ target, title, file, aspect = "square", originalSource = false }) {
     try {
       const source = await readImageFile(file);
-      await openStudentCropper({ target, title, source, aspect });
+      await openStudentCropper({ target, title, source, aspect, originalSource: originalSource ? source : "" });
     } catch (error) {
       showToast(error.message || "Gagal membaca gambar.", "error");
     }
@@ -6141,7 +6236,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
         target: "studentProfilePhoto",
         title: "Crop Foto Profil Siswa",
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses foto profil.", "error");
@@ -6173,7 +6269,11 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
       const result = canvas.toDataURL("image/png");
 
       if (resultState.target === "studentProfilePhoto") {
-        setProfileForm((current) => ({ ...current, profilePhoto: result }));
+        setProfileForm((current) => ({
+          ...current,
+          profilePhoto: result,
+          profilePhotoOriginal: cropperState.originalSource || current.profilePhotoOriginal || cropperState.source
+        }));
       }
 
       setCropperOpen(false);
@@ -6192,7 +6292,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
           fullName: profileForm.fullName,
           email: profileForm.email,
           password: profileForm.password,
-          profilePhoto: profileForm.profilePhoto
+          profilePhoto: profileForm.profilePhoto,
+          profilePhotoOriginal: profileForm.profilePhotoOriginal || profileForm.profilePhoto
         })
       });
 
@@ -6694,7 +6795,8 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                     onClick={() =>
                       setProfileForm((current) => ({
                         ...current,
-                        profilePhoto: ""
+                        profilePhoto: "",
+                        profilePhotoOriginal: ""
                       }))
                     }
                   >
@@ -6707,8 +6809,9 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                       openStudentCropper({
                         target: "studentProfilePhoto",
                         title: "Crop Foto Profil Siswa",
-                        source: profileForm.profilePhoto,
-                        aspect: "square"
+                        source: profileForm.profilePhotoOriginal || profileForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: profileForm.profilePhotoOriginal || profileForm.profilePhoto
                       })
                     }
                   >
@@ -6885,7 +6988,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     zoom: 1,
     minZoom: 1,
     panX: 0,
-    panY: 0
+    panY: 0,
+    originalSource: ""
   });
   const [cropDragging, setCropDragging] = useState(false);
   const cropDragRef = useRef({
@@ -6921,7 +7025,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     fullName: session.user.fullName ?? "",
     email: session.user.email ?? "",
     password: "",
-    profilePhoto: session.user.profilePhoto ?? ""
+    profilePhoto: session.user.profilePhoto ?? "",
+    profilePhotoOriginal: session.user.profilePhotoOriginal ?? session.user.profilePhoto ?? ""
   });
   const [studentForm, setStudentForm] = useState({
     role: "siswa",
@@ -6929,7 +7034,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     nis: "",
     email: "",
     password: "",
-    profilePhoto: ""
+    profilePhoto: "",
+    profilePhotoOriginal: ""
   });
   const [paymentForm, setPaymentForm] = useState({
     studentId: "",
@@ -6955,10 +7061,11 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
 
   const appShellStyle =
     appSettings.backgroundMode === "image" && appSettings.backgroundImage
-      ? {
+        ? {
           backgroundImage: `linear-gradient(rgba(252, 253, 253, 0.9), rgba(252, 253, 253, 0.92)), url(${appSettings.backgroundImage})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundSize: "100% auto",
+          backgroundPosition: "top center",
+          backgroundRepeat: "no-repeat",
           backgroundAttachment: "fixed"
         }
       : {
@@ -6970,7 +7077,7 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     window.setTimeout(() => setToast(null), 2600);
   }
 
-  async function openTreasurerCropper({ target, title, source, aspect = "square" }) {
+  async function openTreasurerCropper({ target, title, source, aspect = "square", originalSource = "" }) {
     try {
       const image = await loadImage(source);
       const dimensions = getCropperDimensions(aspect);
@@ -6993,7 +7100,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
         zoom: minZoom,
         minZoom,
         panX: 0,
-        panY: 0
+        panY: 0,
+        originalSource: originalSource || source
       });
       setCropperOpen(true);
     } catch (error) {
@@ -7001,9 +7109,9 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     }
   }
 
-  async function openTreasurerCropperFromFile({ target, title, file, aspect = "square" }) {
+  async function openTreasurerCropperFromFile({ target, title, file, aspect = "square", originalSource = false }) {
     const source = await readImageFile(file);
-    await openTreasurerCropper({ target, title, source, aspect });
+    await openTreasurerCropper({ target, title, source, aspect, originalSource: originalSource ? source : "" });
   }
 
   function handleCropPointerDown(event) {
@@ -7061,7 +7169,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
       fullName: session.user.fullName ?? "",
       email: session.user.email ?? "",
       password: "",
-      profilePhoto: session.user.profilePhoto ?? ""
+      profilePhoto: session.user.profilePhoto ?? "",
+      profilePhotoOriginal: session.user.profilePhotoOriginal ?? session.user.profilePhoto ?? ""
     });
   }, [session.user]);
 
@@ -7211,7 +7320,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
         target: "treasurerProfilePhoto",
         title: `Crop Foto Profil ${roleLabel}`,
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses foto profil.", "error");
@@ -7232,7 +7342,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
         target: "treasurerStudentPhoto",
         title: "Crop Foto Siswa",
         file,
-        aspect: "square"
+        aspect: "square",
+        originalSource: true
       });
     } catch (error) {
       showToast(error.message || "Gagal memproses foto siswa.", "error");
@@ -7274,9 +7385,17 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
       const result = canvas.toDataURL("image/png");
 
       if (resultState.target === "treasurerProfilePhoto") {
-        setProfileForm((current) => ({ ...current, profilePhoto: result }));
+        setProfileForm((current) => ({
+          ...current,
+          profilePhoto: result,
+          profilePhotoOriginal: cropperState.originalSource || current.profilePhotoOriginal || cropperState.source
+        }));
       } else if (resultState.target === "treasurerStudentPhoto") {
-        setStudentForm((current) => ({ ...current, profilePhoto: result }));
+        setStudentForm((current) => ({
+          ...current,
+          profilePhoto: result,
+          profilePhotoOriginal: cropperState.originalSource || current.profilePhotoOriginal || cropperState.source
+        }));
       }
 
       setCropperOpen(false);
@@ -7295,7 +7414,8 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
           fullName: profileForm.fullName,
           email: profileForm.email,
           password: profileForm.password,
-          profilePhoto: profileForm.profilePhoto
+          profilePhoto: profileForm.profilePhoto,
+          profilePhotoOriginal: profileForm.profilePhotoOriginal || profileForm.profilePhoto
         })
       });
 
@@ -7329,7 +7449,8 @@ async function handleSaveStudent(event) {
         nis: studentForm.nis,
         email: studentForm.email,
         password: studentForm.password,
-        profilePhoto: studentForm.profilePhoto
+        profilePhoto: studentForm.profilePhoto,
+        profilePhotoOriginal: studentForm.profilePhotoOriginal || studentForm.profilePhoto
       })
     });
 
@@ -7339,7 +7460,8 @@ async function handleSaveStudent(event) {
         nis: "",
         email: "",
         password: "",
-        profilePhoto: ""
+        profilePhoto: "",
+        profilePhotoOriginal: ""
       });
       setEditingClassAccount(null);
       setStudentModalOpen(false);
@@ -7358,7 +7480,8 @@ async function handleSaveStudent(event) {
       nis: "",
       email: "",
       password: "",
-      profilePhoto: ""
+      profilePhoto: "",
+      profilePhotoOriginal: ""
     });
     setStudentModalOpen(true);
   }
@@ -7371,7 +7494,8 @@ async function handleSaveStudent(event) {
       nis: account.nis ?? "",
       email: account.email ?? "",
       password: "",
-      profilePhoto: account.profilePhoto ?? ""
+      profilePhoto: account.profilePhoto ?? "",
+      profilePhotoOriginal: account.profilePhotoOriginal ?? account.profilePhoto ?? ""
     });
     setStudentModalOpen(true);
   }
@@ -8709,7 +8833,8 @@ async function handleSaveStudent(event) {
                     onClick={() =>
                       setProfileForm((current) => ({
                         ...current,
-                        profilePhoto: ""
+                        profilePhoto: "",
+                        profilePhotoOriginal: ""
                       }))
                     }
                   >
@@ -8722,8 +8847,9 @@ async function handleSaveStudent(event) {
                       openTreasurerCropper({
                         target: "treasurerProfilePhoto",
                         title: `Crop Foto Profil ${roleLabel}`,
-                        source: profileForm.profilePhoto,
-                        aspect: "square"
+                        source: profileForm.profilePhotoOriginal || profileForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: profileForm.profilePhotoOriginal || profileForm.profilePhoto
                       })
                     }
                   >
@@ -8827,7 +8953,8 @@ async function handleSaveStudent(event) {
                     onClick={() =>
                       setStudentForm((current) => ({
                         ...current,
-                        profilePhoto: ""
+                        profilePhoto: "",
+                        profilePhotoOriginal: ""
                       }))
                     }
                   >
@@ -8840,8 +8967,9 @@ async function handleSaveStudent(event) {
                       openTreasurerCropper({
                         target: "treasurerStudentPhoto",
                         title: "Crop Foto Akun",
-                        source: studentForm.profilePhoto,
-                        aspect: "square"
+                        source: studentForm.profilePhotoOriginal || studentForm.profilePhoto,
+                        aspect: "square",
+                        originalSource: studentForm.profilePhotoOriginal || studentForm.profilePhoto
                       })
                     }
                   >

@@ -2198,7 +2198,7 @@ tbody td {
 }
 
 .settings-top-card {
-  min-height: 366px;
+  min-height: 244px;
   display: flex;
   flex-direction: column;
 }
@@ -2217,6 +2217,11 @@ tbody td {
 
 .settings-top-card .toggle-row {
   min-height: 76px;
+}
+
+.settings-top-card .toggle-row:first-of-type {
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .settings-bottom-card {
@@ -4621,6 +4626,7 @@ tbody td {
 
 .upload-preview-image-button.wide {
   width: 100%;
+  cursor: pointer;
 }
 
 .upload-preview-image.square {
@@ -4632,6 +4638,7 @@ tbody td {
   width: 100%;
   min-height: 180px;
   max-height: 220px;
+  object-fit: contain;
 }
 
 .upload-preview-text {

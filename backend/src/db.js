@@ -49,6 +49,7 @@ export async function initializeDatabase() {
       email VARCHAR(150) NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       profile_photo TEXT,
+      profile_photo_original TEXT,
       role VARCHAR(20) NOT NULL CHECK (role IN ('superadmin', 'bendahara', 'walikelas', 'siswa')),
       class_id INTEGER REFERENCES kelas (id) ON DELETE SET NULL,
       is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -60,6 +61,14 @@ export async function initializeDatabase() {
 
     ALTER TABLE pengguna
     ADD COLUMN IF NOT EXISTS profile_photo TEXT;
+
+    ALTER TABLE pengguna
+    ADD COLUMN IF NOT EXISTS profile_photo_original TEXT;
+
+    UPDATE pengguna
+    SET profile_photo_original = profile_photo
+    WHERE profile_photo_original IS NULL
+      AND profile_photo IS NOT NULL;
 
     ALTER TABLE pengguna
     DROP CONSTRAINT IF EXISTS users_role_check;
@@ -243,10 +252,12 @@ export async function initializeDatabase() {
       id INTEGER PRIMARY KEY,
       app_name VARCHAR(150) NOT NULL DEFAULT 'KasKu',
       logo_image TEXT,
+      logo_original_image TEXT,
       sidebar_color VARCHAR(30) NOT NULL DEFAULT '#fbfcfd',
       background_mode VARCHAR(20) NOT NULL DEFAULT 'solid',
       background_color VARCHAR(30) NOT NULL DEFAULT '#fcfdfd',
       background_image TEXT,
+      background_original_image TEXT,
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
 
@@ -362,6 +373,14 @@ export async function initializeDatabase() {
     ADD COLUMN IF NOT EXISTS deleted_by_ip VARCHAR(100);
 
     ALTER TABLE pengaturan_aplikasi
+    ADD COLUMN IF NOT EXISTS logo_original_image TEXT;
+    ALTER TABLE pengaturan_aplikasi
+    ADD COLUMN IF NOT EXISTS background_original_image TEXT;
+    UPDATE pengaturan_aplikasi
+    SET
+      logo_original_image = COALESCE(logo_original_image, logo_image),
+      background_original_image = COALESCE(background_original_image, background_image);
+    ALTER TABLE pengaturan_aplikasi
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW();
     ALTER TABLE pengaturan_aplikasi
     ADD COLUMN IF NOT EXISTS "delete" INTEGER NOT NULL DEFAULT 0;
@@ -435,13 +454,15 @@ export async function initializeDatabase() {
       id,
       app_name,
       logo_image,
+      logo_original_image,
       sidebar_color,
       background_mode,
       background_color,
       background_image,
+      background_original_image,
       updated_at
     )
-    VALUES (1, 'KasKu', NULL, '#fbfcfd', 'solid', '#fcfdfd', NULL, NOW())
+    VALUES (1, 'KasKu', NULL, NULL, '#fbfcfd', 'solid', '#fcfdfd', NULL, NULL, NOW())
     ON CONFLICT (id) DO NOTHING;
 
     UPDATE kelas

@@ -34,6 +34,7 @@ async function findUserByEmail(email) {
         u.email,
         u.password_hash,
         u.profile_photo,
+        u.profile_photo_original,
         u.role,
         u.class_id,
         c.name AS class_name,
@@ -256,6 +257,7 @@ function mapUser(row) {
     nis: row.nis,
     email: row.email,
     profilePhoto: row.profile_photo,
+    profilePhotoOriginal: row.profile_photo_original ?? row.profile_photo,
     role: row.role,
     classId: row.class_id,
     className: row.class_name,
@@ -276,6 +278,7 @@ async function getRequestUser(request) {
           u.nis,
           u.email,
           u.profile_photo,
+          u.profile_photo_original,
           u.role,
           u.class_id,
           c.name AS class_name,
@@ -322,6 +325,7 @@ async function getRequestUser(request) {
         u.nis,
         u.email,
         u.profile_photo,
+        u.profile_photo_original,
         u.role,
         u.class_id,
         c.name AS class_name,
@@ -692,6 +696,7 @@ async function mergeSystemBackup(payload) {
             email,
             password_hash,
             profile_photo,
+            profile_photo_original,
             role,
             class_id,
             is_active,
@@ -704,13 +709,14 @@ async function mergeSystemBackup(payload) {
             deleted_by_name,
             deleted_by_ip
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamp, NOW()), COALESCE($10::timestamp, NOW()), $11, $12, $13, $14, $15, $16)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamp, NOW()), COALESCE($11::timestamp, NOW()), $12, $13, $14, $15, $16, $17)
           ON CONFLICT (email) DO UPDATE
           SET
             full_name = EXCLUDED.full_name,
             nis = EXCLUDED.nis,
             password_hash = EXCLUDED.password_hash,
             profile_photo = EXCLUDED.profile_photo,
+            profile_photo_original = EXCLUDED.profile_photo_original,
             role = EXCLUDED.role,
             class_id = EXCLUDED.class_id,
             is_active = EXCLUDED.is_active,
@@ -729,6 +735,7 @@ async function mergeSystemBackup(payload) {
           item.email,
           item.password_hash,
           item.profile_photo ?? null,
+          item.profile_photo_original ?? item.profile_photo ?? null,
           item.role,
           classId,
           Boolean(item.is_active),
@@ -936,10 +943,12 @@ async function mergeSystemBackup(payload) {
             id,
             app_name,
             logo_image,
+            logo_original_image,
             sidebar_color,
             background_mode,
             background_color,
             background_image,
+            background_original_image,
             created_at,
             updated_at,
             "delete",
@@ -949,15 +958,17 @@ async function mergeSystemBackup(payload) {
             deleted_by_name,
             deleted_by_ip
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamp, NOW()), COALESCE($9::timestamp, NOW()), $10, $11, $12, $13, $14, $15)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamp, NOW()), COALESCE($11::timestamp, NOW()), $12, $13, $14, $15, $16, $17)
           ON CONFLICT (id) DO UPDATE
           SET
             app_name = EXCLUDED.app_name,
             logo_image = EXCLUDED.logo_image,
+            logo_original_image = EXCLUDED.logo_original_image,
             sidebar_color = EXCLUDED.sidebar_color,
             background_mode = EXCLUDED.background_mode,
             background_color = EXCLUDED.background_color,
             background_image = EXCLUDED.background_image,
+            background_original_image = EXCLUDED.background_original_image,
             updated_at = NOW(),
             "delete" = EXCLUDED."delete",
             deleted_at = EXCLUDED.deleted_at,
@@ -970,10 +981,12 @@ async function mergeSystemBackup(payload) {
           Number(item.id ?? 1),
           item.app_name ?? "KasKu",
           item.logo_image ?? null,
+          item.logo_original_image ?? item.logo_image ?? null,
           item.sidebar_color ?? "#fbfcfd",
           item.background_mode ?? "solid",
           item.background_color ?? "#fcfdfd",
           item.background_image ?? null,
+          item.background_original_image ?? item.background_image ?? null,
           item.created_at ?? null,
           item.updated_at ?? null,
           Number(item.delete ?? 0),
@@ -1155,6 +1168,7 @@ async function buildClassFinancePayload(classId) {
             u.email,
             u.role,
             u.profile_photo,
+            u.profile_photo_original,
             u.is_active,
             k.nominal_kas,
             COALESCE(SUM(CASE WHEN ct.type = 'income' AND LOWER(COALESCE(ct.category, '')) <> 'denda' THEN ct.amount ELSE 0 END), 0)::int AS paid_cash,
@@ -1246,6 +1260,7 @@ async function buildClassFinancePayload(classId) {
       email: row.email,
       role: row.role,
       profilePhoto: row.profile_photo,
+      profilePhotoOriginal: row.profile_photo_original ?? row.profile_photo,
       isActive: row.is_active,
       nominalKas,
       paidCash: isCountedStudent ? financials.paidCash : 0,
@@ -1330,10 +1345,12 @@ app.get("/api/app-settings", async (_request, response) => {
         id: 1,
         app_name: "KasKu",
         logo_image: null,
+        logo_original_image: null,
         sidebar_color: "#fbfcfd",
         background_mode: "solid",
         background_color: "#fcfdfd",
-        background_image: null
+        background_image: null,
+        background_original_image: null
       }
     );
   } catch (error) {
@@ -1555,6 +1572,7 @@ app.get("/api/student/overview", requireStudent, async (request, response) => {
             u.full_name,
             u.email,
             u.profile_photo,
+            u.profile_photo_original,
             u.role,
             u.class_id,
             u.is_active,
@@ -1774,6 +1792,7 @@ app.get("/api/users", requireSuperadmin, async (_request, response) => {
         u.nis,
         u.email,
         u.profile_photo,
+        u.profile_photo_original,
         u.role,
         u.class_id,
         c.name AS class_name,
@@ -1804,6 +1823,8 @@ app.post("/api/users", requireSuperadmin, async (request, response) => {
       email,
       password,
       role,
+      profilePhoto = null,
+      profilePhotoOriginal = profilePhoto,
       classId = null,
       isActive = true
     } = request.body;
@@ -1832,11 +1853,11 @@ app.post("/api/users", requireSuperadmin, async (request, response) => {
 
     const result = await pool.query(
       `
-        INSERT INTO pengguna (full_name, nis, email, password_hash, role, class_id, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+        INSERT INTO pengguna (full_name, nis, email, password_hash, profile_photo, profile_photo_original, role, class_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
-      [fullName, nis?.trim() || null, email, hashPassword(password), role, classId || null, isActive]
+      [fullName, nis?.trim() || null, email, hashPassword(password), profilePhoto, profilePhotoOriginal ?? profilePhoto, role, classId || null, isActive]
     );
 
     const className = classId
@@ -1876,7 +1897,7 @@ app.post("/api/users", requireSuperadmin, async (request, response) => {
 app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
   try {
     const { id } = request.params;
-    const { fullName, nis, email, password, role, classId = null, isActive } = request.body;
+    const { fullName, nis, email, password, role, classId = null, isActive, profilePhoto, profilePhotoOriginal = profilePhoto } = request.body;
 
     if (role && !["bendahara", "walikelas", "siswa", "superadmin"].includes(role)) {
       response.status(400).json({ message: "Role tidak valid." });
@@ -1885,7 +1906,7 @@ app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
 
     const currentResult = await pool.query(
       `
-        SELECT id, full_name, nis, email, password_hash, role, class_id, is_active
+        SELECT id, full_name, nis, email, password_hash, profile_photo, profile_photo_original, role, class_id, is_active
         FROM pengguna
         WHERE id = $1
           AND COALESCE("delete", 0) = 0
@@ -1936,10 +1957,12 @@ app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
           role = COALESCE($5, role),
           class_id = $6,
           is_active = COALESCE($7, is_active),
+          profile_photo = COALESCE($8, profile_photo),
+          profile_photo_original = COALESCE($9, profile_photo_original, $8, profile_photo),
           updated_at = NOW()
-        WHERE id = $8
+        WHERE id = $10
           AND COALESCE("delete", 0) = 0
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
         fullName ?? null,
@@ -1949,6 +1972,8 @@ app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
         role ?? null,
         classId,
         isActive ?? null,
+        profilePhoto ?? null,
+        profilePhotoOriginal ?? null,
         id
       ]
     );
@@ -2039,7 +2064,7 @@ app.delete("/api/users/:id", requireSuperadmin, async (request, response) => {
 app.patch("/api/profile", requireAuthenticated, async (request, response) => {
   try {
     const userId = request.currentUser.id;
-    const { fullName, email, password, profilePhoto } = request.body;
+    const { fullName, email, password, profilePhoto, profilePhotoOriginal = profilePhoto } = request.body;
 
     if (!userId) {
       response.status(400).json({ message: "User tidak valid." });
@@ -2048,7 +2073,7 @@ app.patch("/api/profile", requireAuthenticated, async (request, response) => {
 
     const currentResult = await pool.query(
       `
-        SELECT id, full_name, nis, email, profile_photo, password_hash, role, class_id, is_active, created_at
+        SELECT id, full_name, nis, email, profile_photo, profile_photo_original, password_hash, role, class_id, is_active, created_at
         FROM pengguna
         WHERE id = $1
         LIMIT 1
@@ -2073,15 +2098,17 @@ app.patch("/api/profile", requireAuthenticated, async (request, response) => {
           full_name = COALESCE($1, full_name),
           email = COALESCE($2, email),
           password_hash = $3,
-          profile_photo = $4
-        WHERE id = $5
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+          profile_photo = $4,
+          profile_photo_original = $5
+        WHERE id = $6
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
         fullName ?? currentUser.full_name,
         email ?? currentUser.email,
         nextPasswordHash,
         profilePhoto ?? currentUser.profile_photo ?? null,
+        profilePhotoOriginal ?? currentUser.profile_photo_original ?? profilePhoto ?? currentUser.profile_photo ?? null,
         userId
       ]
     );
@@ -2244,6 +2271,7 @@ app.post("/api/treasurer/students", requireTreasurer, async (request, response) 
       password,
       role = "siswa",
       profilePhoto = null,
+      profilePhotoOriginal = profilePhoto,
       isActive = true
     } = request.body;
 
@@ -2264,9 +2292,9 @@ app.post("/api/treasurer/students", requireTreasurer, async (request, response) 
 
     const result = await pool.query(
       `
-        INSERT INTO pengguna (full_name, nis, email, password_hash, profile_photo, role, class_id, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+        INSERT INTO pengguna (full_name, nis, email, password_hash, profile_photo, profile_photo_original, role, class_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
         fullName.trim(),
@@ -2274,6 +2302,7 @@ app.post("/api/treasurer/students", requireTreasurer, async (request, response) 
         email.trim(),
         hashPassword(password.trim()),
         profilePhoto,
+        profilePhotoOriginal ?? profilePhoto,
         role,
         classId,
         isActive
@@ -2308,6 +2337,7 @@ app.post("/api/homeroom/students", requireHomeroomTeacher, async (request, respo
       password,
       role = "siswa",
       profilePhoto = null,
+      profilePhotoOriginal = profilePhoto,
       isActive = true
     } = request.body;
 
@@ -2328,9 +2358,9 @@ app.post("/api/homeroom/students", requireHomeroomTeacher, async (request, respo
 
     const result = await pool.query(
       `
-        INSERT INTO pengguna (full_name, nis, email, password_hash, profile_photo, role, class_id, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+        INSERT INTO pengguna (full_name, nis, email, password_hash, profile_photo, profile_photo_original, role, class_id, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
         fullName.trim(),
@@ -2338,6 +2368,7 @@ app.post("/api/homeroom/students", requireHomeroomTeacher, async (request, respo
         email.trim(),
         hashPassword(password.trim()),
         profilePhoto,
+        profilePhotoOriginal ?? profilePhoto,
         role,
         classId,
         isActive
@@ -2367,7 +2398,7 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
   try {
     const classId = request.currentUser.classId;
     const { id } = request.params;
-    const { fullName, nis, email, password, role = "siswa", profilePhoto, isActive } = request.body;
+    const { fullName, nis, email, password, role = "siswa", profilePhoto, profilePhotoOriginal = profilePhoto, isActive } = request.body;
 
     if (!classId) {
       response.status(400).json({ message: "Akun belum terhubung ke kelas." });
@@ -2386,7 +2417,7 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
 
     const currentResult = await pool.query(
       `
-        SELECT id, password_hash
+        SELECT id, password_hash, profile_photo, profile_photo_original
         FROM pengguna
         WHERE id = $1
           AND class_id = $2
@@ -2416,13 +2447,14 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
           password_hash = $4,
           role = $5,
           profile_photo = COALESCE($6, profile_photo),
-          is_active = COALESCE($7, is_active),
+          profile_photo_original = COALESCE($7, profile_photo_original, $6, profile_photo),
+          is_active = COALESCE($8, is_active),
           updated_at = NOW()
-        WHERE id = $8
-          AND class_id = $9
+        WHERE id = $9
+          AND class_id = $10
           AND role IN ('siswa', 'bendahara')
           AND COALESCE("delete", 0) = 0
-        RETURNING id, full_name, nis, email, profile_photo, role, class_id, is_active, created_at
+        RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
         fullName.trim(),
@@ -2431,6 +2463,7 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
         nextPasswordHash,
         role,
         profilePhoto ?? null,
+        profilePhotoOriginal ?? null,
         isActive ?? null,
         id,
         classId
@@ -3015,10 +3048,12 @@ app.put("/api/app-settings", requireSuperadmin, async (request, response) => {
     const {
       appName = "KasKu",
       logoImage = null,
+      logoOriginalImage = logoImage,
       sidebarColor = "#fbfcfd",
       backgroundMode = "solid",
       backgroundColor = "#fcfdfd",
-      backgroundImage = null
+      backgroundImage = null,
+      backgroundOriginalImage = backgroundImage
     } = request.body;
 
     const result = await pool.query(
@@ -3027,21 +3062,25 @@ app.put("/api/app-settings", requireSuperadmin, async (request, response) => {
           id,
           app_name,
           logo_image,
+          logo_original_image,
           sidebar_color,
           background_mode,
           background_color,
           background_image,
+          background_original_image,
           updated_at
         )
-        VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           app_name = EXCLUDED.app_name,
           logo_image = EXCLUDED.logo_image,
+          logo_original_image = EXCLUDED.logo_original_image,
           sidebar_color = EXCLUDED.sidebar_color,
           background_mode = EXCLUDED.background_mode,
           background_color = EXCLUDED.background_color,
           background_image = EXCLUDED.background_image,
+          background_original_image = EXCLUDED.background_original_image,
           "delete" = 0,
           deleted_at = NULL,
           deleted_day = NULL,
@@ -3051,7 +3090,7 @@ app.put("/api/app-settings", requireSuperadmin, async (request, response) => {
           updated_at = NOW()
         RETURNING *
       `,
-      [appName, logoImage, sidebarColor, backgroundMode, backgroundColor, backgroundImage]
+      [appName, logoImage, logoOriginalImage, sidebarColor, backgroundMode, backgroundColor, backgroundImage, backgroundOriginalImage]
     );
 
     response.json(result.rows[0]);
