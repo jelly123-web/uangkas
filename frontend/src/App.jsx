@@ -877,6 +877,42 @@ function slugifyFilePart(value) {
     .replace(/^-+|-+$/g, "") || "laporan";
 }
 
+function isValidFullName(value) {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ");
+  return /^[\p{L}\s.'-]+$/u.test(normalized) && /\p{L}/u.test(normalized);
+}
+
+function isValidEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value ?? "").trim());
+}
+
+function validateUserAccountForm(form, { editing = false } = {}) {
+  const errors = {};
+  const fullName = String(form.fullName ?? "").trim();
+  const email = String(form.email ?? "").trim();
+  const password = String(form.password ?? "");
+
+  if (!fullName) {
+    errors.fullName = "Nama wajib diisi.";
+  } else if (!isValidFullName(fullName)) {
+    errors.fullName = "Nama hanya boleh huruf, spasi, titik, petik, atau strip.";
+  }
+
+  if (!email) {
+    errors.email = "Email wajib diisi.";
+  } else if (!isValidEmailAddress(email)) {
+    errors.email = "Email harus benar, contoh: nama@gmail.com.";
+  }
+
+  if (!editing && !password.trim()) {
+    errors.password = "Password wajib diisi.";
+  } else if (password.trim() && password.trim().length < 6) {
+    errors.password = "Password minimal 6 karakter.";
+  }
+
+  return errors;
+}
+
 function PasswordField({
   value,
   onChange,
@@ -1247,6 +1283,7 @@ export default function App() {
     classId: "",
     isActive: true
   });
+  const [userFormErrors, setUserFormErrors] = useState({});
   const [classForm, setClassForm] = useState({
     name: "",
     nominalKas: "",
@@ -1320,7 +1357,8 @@ export default function App() {
     email: "",
     password: "",
     profilePhoto: "",
-    profilePhotoOriginal: ""
+    profilePhotoOriginal: "",
+    isActive: true
   });
   const [appSettings, setAppSettings] = useState(initialStoredAppSettings);
   const backupFileInputRef = useRef(null);
@@ -1330,6 +1368,19 @@ export default function App() {
   function showToast(message, type = "success") {
     setToast({ message, type, id: Date.now() });
     window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function updateUserFormField(field, value) {
+    setUserForm((current) => ({ ...current, [field]: value }));
+    setUserFormErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   }
 
   async function openTreasurerCropper({ target, title, source, aspect = "square" }) {
@@ -2024,14 +2075,22 @@ export default function App() {
     event.preventDefault();
 
     try {
+      const errors = validateUserAccountForm(userForm, { editing: Boolean(editingUser) });
+      setUserFormErrors(errors);
+
+      if (Object.keys(errors).length > 0) {
+        showToast("Periksa lagi data akun yang wajib diisi.", "error");
+        return;
+      }
+
       const payload = {
         ...userForm,
+        fullName: userForm.fullName.trim().replace(/\s+/g, " "),
+        email: userForm.email.trim(),
+        password: userForm.password.trim(),
+        nis: userForm.nis.trim(),
         classId: userForm.classId ? Number(userForm.classId) : null
       };
-
-      if (!editingUser && !payload.profilePhoto) {
-        throw new Error("Foto profil wajib diisi.");
-      }
 
       if (editingUser) {
         await apiFetch(`/api/users/${editingUser.id}`, {
@@ -2056,6 +2115,7 @@ export default function App() {
         classId: "",
         isActive: true
       });
+      setUserFormErrors({});
       setEditingUser(null);
       setUserModalOpen(false);
       await loadDashboard();
@@ -2067,6 +2127,7 @@ export default function App() {
 
   function handleOpenAddUser() {
     setEditingUser(null);
+    setUserFormErrors({});
     setUserForm({
       fullName: "",
       nis: "",
@@ -2083,6 +2144,7 @@ export default function App() {
 
   function handleOpenEditUser(user) {
     setEditingUser(user);
+    setUserFormErrors({});
     setUserForm({
       fullName: user.fullName ?? "",
       nis: user.nis ?? "",
@@ -4447,6 +4509,7 @@ export default function App() {
                 onClick={() => {
                   setUserModalOpen(false);
                   setEditingUser(null);
+                  setUserFormErrors({});
                 }}
               >
                 <i className="fas fa-xmark" />
@@ -4514,36 +4577,34 @@ export default function App() {
               <div className="form-group">
                 <label className="form-label">Nama Lengkap</label>
                 <input
-                  className="form-input"
+                  className={`form-input ${userFormErrors.fullName ? "is-invalid" : ""}`}
                   placeholder="Masukkan nama lengkap"
                   value={userForm.fullName}
-                  onChange={(event) =>
-                    setUserForm((current) => ({ ...current, fullName: event.target.value }))
-                  }
+                  onChange={(event) => updateUserFormField("fullName", event.target.value)}
                 />
+                {userFormErrors.fullName ? <div className="form-error-text">{userFormErrors.fullName}</div> : null}
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Email</label>
                   <input
-                    className="form-input"
+                    className={`form-input ${userFormErrors.email ? "is-invalid" : ""}`}
                     placeholder="email@contoh.com"
                     value={userForm.email}
-                    onChange={(event) =>
-                      setUserForm((current) => ({ ...current, email: event.target.value }))
-                    }
+                    onChange={(event) => updateUserFormField("email", event.target.value)}
                   />
+                  {userFormErrors.email ? <div className="form-error-text">{userFormErrors.email}</div> : null}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password</label>
                   <PasswordField
                     placeholder={editingUser ? "Kosongkan jika tidak diubah" : "Minimal 6 karakter"}
                     value={userForm.password}
-                    onChange={(event) =>
-                      setUserForm((current) => ({ ...current, password: event.target.value }))
-                    }
+                    onChange={(event) => updateUserFormField("password", event.target.value)}
+                    className={`form-input ${userFormErrors.password ? "is-invalid" : ""}`}
                     autoComplete="new-password"
                   />
+                  {userFormErrors.password ? <div className="form-error-text">{userFormErrors.password}</div> : null}
                 </div>
               </div>
               <div className="form-group">
@@ -4552,9 +4613,7 @@ export default function App() {
                   className="form-input"
                   placeholder="Isi jika akun siswa"
                   value={userForm.nis}
-                  onChange={(event) =>
-                    setUserForm((current) => ({ ...current, nis: event.target.value }))
-                  }
+                  onChange={(event) => updateUserFormField("nis", event.target.value)}
                 />
               </div>
               <div className="form-row">
@@ -4614,6 +4673,7 @@ export default function App() {
                   onClick={() => {
                     setUserModalOpen(false);
                     setEditingUser(null);
+                    setUserFormErrors({});
                   }}
                 >
                   Batal
@@ -6369,6 +6429,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
 
   const overview = data.overview ?? {};
   const transactions = data.transactions ?? [];
+  const studentNominalKas = data.classInfo?.nominal_kas ?? overview.nominal ?? 0;
   const statusLabel = overview.status === "lunas" ? "Lunas" : "Belum Bayar";
   const statusClass = overview.status === "lunas" ? "status-lunas" : "status-belum";
   const historyPagination = paginateItems(transactions, historyPage, 10);
@@ -6382,11 +6443,11 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
       {
         id: data.student.id,
         fullName: data.student.fullName ?? session.user.fullName,
-        nominalKas: overview.nominal ?? data.classInfo?.nominal_kas ?? 0,
+        nominalKas: studentNominalKas,
         outstandingPeriods: 0
       }
     ];
-  }, [data.student, session.user.fullName, overview.nominal, data.classInfo?.nominal_kas]);
+  }, [data.student, session.user.fullName, studentNominalKas]);
   const monthlyPaymentStatuses = buildAcademicMonthStatuses(
     studentPaymentRows,
     transactions,
@@ -6504,7 +6565,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
 
           <section className={`page-section ${activePage === "dashboard" ? "active" : ""}`}>
             <div className="stats-grid mobile-dashboard-stats">
-              <StatCard color="orange" icon="fa-coins" value={formatCurrency(overview.nominal ?? 0)} label="Nominal Kas" />
+              <StatCard color="orange" icon="fa-coins" value={formatCurrency(studentNominalKas)} label="Nominal Kas" />
               <StatCard color="yellow" icon="fa-file-invoice-dollar" value={formatCurrency(overview.paid_fine ?? 0)} label="Denda Dibayar" />
               <StatCard color="green" icon="fa-wallet" value={formatCurrency(overview.paid_cash ?? 0)} label="Kas Dibayar" />
               <StatCard color="blue" icon="fa-circle-check" value={statusLabel} label="Status Pembayaran" />
@@ -6517,7 +6578,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                 <div className="saldo-details">
                   <div className="saldo-detail-item">
                     <span className="saldo-detail-label">Nominal aktif</span>
-                    <span className="saldo-detail-value">{formatCurrency(overview.nominal ?? 0)}</span>
+                    <span className="saldo-detail-value">{formatCurrency(studentNominalKas)}</span>
                   </div>
                   <div className="saldo-detail-item">
                     <span className="saldo-detail-label">Total denda dibayar</span>
@@ -6597,7 +6658,7 @@ function StudentPanel({ session, setSession, handleLogout, activePage, setActive
                     </div>
 
                     <div className="student-payment-report-stats">
-                      <SimpleStat value={formatCurrency(overview.nominal ?? 0)} label="Nominal kas" />
+                      <SimpleStat value={formatCurrency(studentNominalKas)} label="Nominal kas" />
                       <SimpleStat value={formatCurrency(selectedMonthTotalPaid)} label="Total dibayar bulan ini" />
                       <SimpleStat value={`${paidMonthsCount} bulan`} label="Bulan lunas" />
                       <SimpleStat value={`${unpaidMonthsCount} bulan`} label="Belum bayar" />
@@ -7037,6 +7098,7 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
     profilePhoto: "",
     profilePhotoOriginal: ""
   });
+  const [studentFormErrors, setStudentFormErrors] = useState({});
   const [paymentForm, setPaymentForm] = useState({
     studentId: "",
     amount: "",
@@ -7075,6 +7137,19 @@ function TreasurerPanel({ session, setSession, handleLogout, activePage, setActi
   function showToast(message, type = "success") {
     setToast({ message, type, id: Date.now() });
     window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function updateStudentFormField(field, value) {
+    setStudentForm((current) => ({ ...current, [field]: value }));
+    setStudentFormErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   }
 
   async function openTreasurerCropper({ target, title, source, aspect = "square", originalSource = "" }) {
@@ -7438,19 +7513,28 @@ async function handleSaveStudent(event) {
   event.preventDefault();
 
   try {
+    const errors = validateUserAccountForm(studentForm, { editing: Boolean(editingClassAccount) });
+    setStudentFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      showToast("Periksa lagi data akun yang wajib diisi.", "error");
+      return;
+    }
+
     const studentCreateEndpoint = isHomeroom ? "/api/homeroom/students" : "/api/treasurer/students";
     const endpoint = editingClassAccount ? `/api/class-accounts/${editingClassAccount.id}` : studentCreateEndpoint;
 
     await apiFetchTreasurer(endpoint, {
       method: editingClassAccount ? "PATCH" : "POST",
       body: JSON.stringify({
-        fullName: studentForm.fullName,
+        fullName: studentForm.fullName.trim().replace(/\s+/g, " "),
         role: studentForm.role,
-        nis: studentForm.nis,
-        email: studentForm.email,
-        password: studentForm.password,
+        nis: studentForm.nis.trim(),
+        email: studentForm.email.trim(),
+        password: studentForm.password.trim(),
         profilePhoto: studentForm.profilePhoto,
-        profilePhotoOriginal: studentForm.profilePhotoOriginal || studentForm.profilePhoto
+        profilePhotoOriginal: studentForm.profilePhotoOriginal || studentForm.profilePhoto,
+        isActive: studentForm.isActive
       })
     });
 
@@ -7461,8 +7545,10 @@ async function handleSaveStudent(event) {
         email: "",
         password: "",
         profilePhoto: "",
-        profilePhotoOriginal: ""
+        profilePhotoOriginal: "",
+        isActive: true
       });
+      setStudentFormErrors({});
       setEditingClassAccount(null);
       setStudentModalOpen(false);
       await loadTreasurerData();
@@ -7474,6 +7560,7 @@ async function handleSaveStudent(event) {
 
   function handleOpenAddClassAccount() {
     setEditingClassAccount(null);
+    setStudentFormErrors({});
     setStudentForm({
       role: "siswa",
       fullName: "",
@@ -7481,13 +7568,15 @@ async function handleSaveStudent(event) {
       email: "",
       password: "",
       profilePhoto: "",
-      profilePhotoOriginal: ""
+      profilePhotoOriginal: "",
+      isActive: true
     });
     setStudentModalOpen(true);
   }
 
   function handleOpenEditClassAccount(account) {
     setEditingClassAccount(account);
+    setStudentFormErrors({});
     setStudentForm({
       role: account.role ?? "siswa",
       fullName: account.fullName ?? "",
@@ -7495,24 +7584,10 @@ async function handleSaveStudent(event) {
       email: account.email ?? "",
       password: "",
       profilePhoto: account.profilePhoto ?? "",
-      profilePhotoOriginal: account.profilePhotoOriginal ?? account.profilePhoto ?? ""
+      profilePhotoOriginal: account.profilePhotoOriginal ?? account.profilePhoto ?? "",
+      isActive: account.isActive ?? true
     });
     setStudentModalOpen(true);
-  }
-
-  async function handleDeleteClassAccount(account) {
-    const confirmed = window.confirm(`Hapus akun "${account.fullName}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await apiFetchTreasurer(`/api/class-accounts/${account.id}`, { method: "DELETE" });
-      await loadTreasurerData();
-      showToast("Akun berhasil dihapus.");
-    } catch (error) {
-      showToast(error.message || "Gagal menghapus akun.", "error");
-    }
   }
 
   const nominalKas = Number(data.classInfo?.nominal_kas ?? 0);
@@ -7629,6 +7704,14 @@ async function handleSaveStudent(event) {
     };
   }, [reportFilters, reportGenerated, transactions]);
 
+  const getReportStudentName = (item) => {
+    if (item.student_name || item.studentName) {
+      return item.student_name || item.studentName;
+    }
+
+    return item.type === "income" ? "Tanpa nama" : "-";
+  };
+
   function handleExportTreasurerExcel() {
     if (!generatedReport) {
       showToast("Tampilkan laporan dulu sebelum export Excel.", "error");
@@ -7636,9 +7719,16 @@ async function handleSaveStudent(event) {
     }
 
     const rows = [
-      ["Tanggal", "Jenis", "Keterangan", "Jumlah"],
+      ["Ringkasan Laporan"],
+      ["Pemasukan", Number(generatedReport.income ?? 0)],
+      ["Denda", Number(generatedReport.fine ?? 0)],
+      ["Pengeluaran", Number(generatedReport.expense ?? 0)],
+      ["Saldo", Number(generatedReport.balance ?? 0)],
+      [],
+      ["Tanggal", "Nama Siswa", "Jenis", "Keterangan", "Jumlah"],
       ...generatedReport.rows.map((item) => [
         formatDateLabel(item.created_at),
+        getReportStudentName(item),
         item.type === "income" ? "Pemasukan" : "Pengeluaran",
         item.note || item.title,
         `${item.type === "income" ? "+" : "-"}${Number(item.amount ?? 0)}`
@@ -7674,19 +7764,35 @@ async function handleSaveStudent(event) {
     autoTable(document, {
       startY: 40,
       theme: "grid",
-      head: [["Tanggal", "Jenis", "Keterangan", "Jumlah"]],
+      head: [["Pemasukan", "Denda", "Pengeluaran", "Saldo"]],
+      body: [[
+        formatCurrency(generatedReport.income),
+        formatCurrency(generatedReport.fine),
+        formatCurrency(generatedReport.expense),
+        formatCurrency(generatedReport.balance)
+      ]],
+      styles: { fontSize: 10, cellPadding: 8, halign: "center" },
+      headStyles: { fillColor: [16, 185, 129] },
+      bodyStyles: { fontStyle: "bold" }
+    });
+
+    autoTable(document, {
+      startY: document.lastAutoTable.finalY + 18,
+      theme: "grid",
+      head: [["Tanggal", "Nama Siswa", "Jenis", "Keterangan", "Jumlah"]],
       body: generatedReport.rows.length
         ? generatedReport.rows.map((item) => [
             formatDateLabel(item.created_at),
+            getReportStudentName(item),
             item.type === "income" ? "Pemasukan" : "Pengeluaran",
             item.note || item.title,
             `${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}`
           ])
-        : [["-", "-", "Tidak ada transaksi pada periode ini.", "-"]],
+        : [["-", "-", "-", "Tidak ada transaksi pada periode ini.", "-"]],
       styles: { fontSize: 10, cellPadding: 8 },
       headStyles: { fillColor: [59, 130, 246] },
       didParseCell: (hook) => {
-        if (hook.section !== "body" || hook.column.index !== 3) {
+        if (hook.section !== "body" || hook.column.index !== 4) {
           return;
         }
 
@@ -7725,13 +7831,36 @@ async function handleSaveStudent(event) {
             th { background: #f9fafb; text-transform: uppercase; font-size: 12px; letter-spacing: .06em; color: #6b7280; }
             .plus { color: #059669; font-weight: 700; }
             .minus { color: #dc2626; font-weight: 700; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+            .summary-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+            .summary-label { color: #6b7280; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+            .summary-value { font-size: 18px; font-weight: 800; }
           </style>
         </head>
         <body>
+          <div class="summary">
+            <div class="summary-card">
+              <div class="summary-label">Pemasukan</div>
+              <div class="summary-value plus">${formatCurrency(generatedReport.income)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Denda</div>
+              <div class="summary-value plus">${formatCurrency(generatedReport.fine)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Pengeluaran</div>
+              <div class="summary-value minus">${formatCurrency(generatedReport.expense)}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">Saldo</div>
+              <div class="summary-value plus">${formatCurrency(generatedReport.balance)}</div>
+            </div>
+          </div>
           <table>
             <thead>
               <tr>
                 <th>Tanggal</th>
+                <th>Nama Siswa</th>
                 <th>Jenis</th>
                 <th>Keterangan</th>
                 <th>Jumlah</th>
@@ -7745,6 +7874,7 @@ async function handleSaveStudent(event) {
                         (item) => `
                           <tr>
                             <td>${formatDateLabel(item.created_at)}</td>
+                            <td>${getReportStudentName(item)}</td>
                             <td>${item.type === "income" ? "Pemasukan" : "Pengeluaran"}</td>
                             <td>${item.note || item.title}</td>
                             <td class="${item.type === "income" ? "plus" : "minus"}">${item.type === "income" ? "+" : "-"}${formatCurrency(item.amount)}</td>
@@ -7752,7 +7882,7 @@ async function handleSaveStudent(event) {
                         `
                       )
                       .join("")
-                  : `<tr><td colspan="4">Tidak ada transaksi pada periode ini.</td></tr>`
+                  : `<tr><td colspan="5">Tidak ada transaksi pada periode ini.</td></tr>`
               }
             </tbody>
           </table>
@@ -8050,9 +8180,6 @@ async function handleSaveStudent(event) {
                               <div className="table-actions">
                                 <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEditClassAccount(student)}>
                                   <i className="fas fa-pen" /> Edit
-                                </button>
-                                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteClassAccount(student)}>
-                                  <i className="fas fa-trash" /> Hapus
                                 </button>
                               </div>
                             </td>
@@ -8551,6 +8678,7 @@ async function handleSaveStudent(event) {
                         <thead>
                           <tr>
                             <th>Tanggal</th>
+                            <th>Nama Siswa</th>
                             <th>Jenis</th>
                             <th>Keterangan</th>
                             <th>Jumlah</th>
@@ -8559,7 +8687,7 @@ async function handleSaveStudent(event) {
                         <tbody>
                           {generatedReport.rows.length === 0 ? (
                             <tr>
-                              <td colSpan="4">
+                              <td colSpan="5">
                                 <div className="empty-row">Tidak ada transaksi pada periode ini.</div>
                               </td>
                             </tr>
@@ -8567,6 +8695,7 @@ async function handleSaveStudent(event) {
                             generatedReport.rows.map((item) => (
                               <tr key={item.id}>
                                 <td data-label="Tanggal">{formatDateLabel(item.created_at)}</td>
+                                <td data-label="Nama Siswa">{getReportStudentName(item)}</td>
                                 <td data-label="Jenis">{item.type === "income" ? "Pemasukan" : "Pengeluaran"}</td>
                                 <td data-label="Keterangan">{item.note || item.title}</td>
                                 <td data-label="Jumlah" style={{ color: item.type === "income" ? "var(--accent-deep)" : "var(--red)", fontWeight: 800 }}>
@@ -8716,14 +8845,33 @@ async function handleSaveStudent(event) {
               </div>
               <div className="form-group">
                 <label className="form-label">Alasan Denda</label>
-                <textarea
-                  className="form-input form-textarea"
+                <select
+                  className="form-select"
                   value={paymentForm.fineReason}
-                  onChange={(event) =>
-                    setPaymentForm((current) => ({ ...current, fineReason: event.target.value }))
-                  }
-                  placeholder="Contoh: Terlambat bayar kas 2 minggu"
-                />
+                  onChange={(event) => {
+                    const selectedFineType = fineTypes.find((item) => item.title === event.target.value);
+                    const selectedReason = selectedFineType?.title ?? event.target.value;
+
+                    setPaymentForm((current) => ({
+                      ...current,
+                      fineReason: selectedReason,
+                      fineAmount:
+                        selectedFineType && (!Number(current.fineAmount) || Number(current.fineAmount) <= 0)
+                          ? String(selectedFineType.amount ?? "")
+                          : current.fineAmount
+                    }));
+                  }}
+                >
+                  <option value="">Pilih alasan denda</option>
+                  {fineTypes.map((item) => (
+                    <option key={item.id} value={item.title}>
+                      {item.title} - {formatCurrency(item.amount)}
+                    </option>
+                  ))}
+                  {fineTypes.length === 0 ? (
+                    <option value="Pembayaran denda keterlambatan">Pembayaran denda keterlambatan</option>
+                  ) : null}
+                </select>
               </div>
               <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: -4 }}>
                 Sistem akan membaca bulan dari teks yang ditulis. Contoh "untuk Agustus" akan mulai masuk ke Agustus. Jika nominalnya lebih, sisanya otomatis lanjut ke bulan berikutnya per minggu.
@@ -8915,7 +9063,7 @@ async function handleSaveStudent(event) {
 
       {studentModalOpen && (
         <div className="modal-overlay show">
-          <div className="modal-card">
+          <div className="modal-card account-modal">
             <div className="modal-header">
               <h3>{editingClassAccount ? "Edit Akun" : "Tambah Akun"}</h3>
               <button
@@ -8988,9 +9136,7 @@ async function handleSaveStudent(event) {
                 <select
                   className="form-input"
                   value={studentForm.role}
-                  onChange={(event) =>
-                    setStudentForm((current) => ({ ...current, role: event.target.value }))
-                  }
+                  onChange={(event) => updateStudentFormField("role", event.target.value)}
                   required
                 >
                   <option value="siswa">Siswa</option>
@@ -9001,48 +9147,52 @@ async function handleSaveStudent(event) {
               <div className="form-group">
                 <label className="form-label">Nama Lengkap</label>
                 <input
-                  className="form-input"
+                  className={`form-input ${studentFormErrors.fullName ? "is-invalid" : ""}`}
                   value={studentForm.fullName}
-                  onChange={(event) =>
-                    setStudentForm((current) => ({ ...current, fullName: event.target.value }))
-                  }
-                  required
+                  onChange={(event) => updateStudentFormField("fullName", event.target.value)}
                 />
+                {studentFormErrors.fullName ? <div className="form-error-text">{studentFormErrors.fullName}</div> : null}
               </div>
               <div className="form-group">
                 <label className="form-label">NIS</label>
                 <input
                   className="form-input"
                   value={studentForm.nis}
-                  onChange={(event) =>
-                    setStudentForm((current) => ({ ...current, nis: event.target.value }))
-                  }
+                  onChange={(event) => updateStudentFormField("nis", event.target.value)}
                   placeholder={studentForm.role === "bendahara" ? "Opsional untuk bendahara" : "Nomor induk siswa"}
                 />
               </div>
               <div className="form-group">
                 <label className="form-label">Email</label>
                 <input
-                  className="form-input"
-                  type="email"
+                  className={`form-input ${studentFormErrors.email ? "is-invalid" : ""}`}
+                  type="text"
                   value={studentForm.email}
-                  onChange={(event) =>
-                    setStudentForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                  required
+                  onChange={(event) => updateStudentFormField("email", event.target.value)}
                 />
+                {studentFormErrors.email ? <div className="form-error-text">{studentFormErrors.email}</div> : null}
               </div>
               <div className="form-group">
                 <label className="form-label">Password</label>
                 <PasswordField
                   value={studentForm.password}
-                  onChange={(event) =>
-                    setStudentForm((current) => ({ ...current, password: event.target.value }))
-                  }
+                  onChange={(event) => updateStudentFormField("password", event.target.value)}
                   placeholder={editingClassAccount ? "Kosongkan jika tidak diganti" : "Minimal 6 karakter"}
-                  required={!editingClassAccount}
+                  className={`form-input ${studentFormErrors.password ? "is-invalid" : ""}`}
                   autoComplete="new-password"
                 />
+                {studentFormErrors.password ? <div className="form-error-text">{studentFormErrors.password}</div> : null}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Status akun</label>
+                <select
+                  className="form-select"
+                  value={studentForm.isActive ? "aktif" : "nonaktif"}
+                  onChange={(event) => updateStudentFormField("isActive", event.target.value === "aktif")}
+                >
+                  <option value="aktif">Aktif</option>
+                  <option value="nonaktif">Nonaktif</option>
+                </select>
               </div>
               <div className="modal-footer">
                 <button
@@ -9051,6 +9201,7 @@ async function handleSaveStudent(event) {
                   onClick={() => {
                     setStudentModalOpen(false);
                     setEditingClassAccount(null);
+                    setStudentFormErrors({});
                   }}
                 >
                   Batal

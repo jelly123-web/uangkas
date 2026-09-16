@@ -20,6 +20,47 @@ function createSessionToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+function isValidFullName(value) {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ");
+  return /^[\p{L}\s.'-]+$/u.test(normalized) && /\p{L}/u.test(normalized);
+}
+
+function isValidEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(value ?? "").trim());
+}
+
+function validateAccountInput({ fullName, email, password, requirePassword = true }) {
+  const normalizedName = String(fullName ?? "").trim().replace(/\s+/g, " ");
+  const normalizedEmail = String(email ?? "").trim();
+  const normalizedPassword = String(password ?? "").trim();
+
+  if (!normalizedName) {
+    return "Nama wajib diisi.";
+  }
+
+  if (!isValidFullName(normalizedName)) {
+    return "Nama hanya boleh huruf, spasi, titik, petik, atau strip.";
+  }
+
+  if (!normalizedEmail) {
+    return "Email wajib diisi.";
+  }
+
+  if (!isValidEmailAddress(normalizedEmail)) {
+    return "Email harus benar, contoh: nama@gmail.com.";
+  }
+
+  if (requirePassword && !normalizedPassword) {
+    return "Password wajib diisi.";
+  }
+
+  if (normalizedPassword && normalizedPassword.length < 6) {
+    return "Password minimal 6 karakter.";
+  }
+
+  return "";
+}
+
 async function findUserByEmail(email) {
   if (!email) {
     return null;
@@ -1645,7 +1686,14 @@ app.get("/api/student/overview", requireStudent, async (request, response) => {
     const paidFine = transactions
       .filter((item) => (item.category ?? "").toLowerCase() === "denda")
       .reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-    const financials = computeStudentFinancials({ settings, paidCash, paidFine });
+    const financials = computeStudentFinancials({
+      settings: {
+        ...settings,
+        nominal_kas: student?.nominal_kas ?? settings?.nominal_kas ?? settings?.nominal
+      },
+      paidCash,
+      paidFine
+    });
 
     const studentPaymentAnnouncements = transactions
       .filter((item) => (item.category ?? "").toLowerCase() !== "denda")
@@ -1828,6 +1876,12 @@ app.post("/api/users", requireSuperadmin, async (request, response) => {
       classId = null,
       isActive = true
     } = request.body;
+    const validationMessage = validateAccountInput({ fullName, email, password, requirePassword: true });
+
+    if (validationMessage) {
+      response.status(400).json({ message: validationMessage });
+      return;
+    }
 
     if (!["bendahara", "walikelas", "siswa", "superadmin"].includes(role)) {
       response.status(400).json({ message: "Role tidak valid." });
@@ -1857,7 +1911,17 @@ app.post("/api/users", requireSuperadmin, async (request, response) => {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
-      [fullName, nis?.trim() || null, email, hashPassword(password), profilePhoto, profilePhotoOriginal ?? profilePhoto, role, classId || null, isActive]
+      [
+        fullName.trim().replace(/\s+/g, " "),
+        nis?.trim() || null,
+        email.trim(),
+        hashPassword(password.trim()),
+        profilePhoto,
+        profilePhotoOriginal ?? profilePhoto,
+        role,
+        classId || null,
+        isActive
+      ]
     );
 
     const className = classId
@@ -1898,6 +1962,12 @@ app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
   try {
     const { id } = request.params;
     const { fullName, nis, email, password, role, classId = null, isActive, profilePhoto, profilePhotoOriginal = profilePhoto } = request.body;
+    const validationMessage = validateAccountInput({ fullName, email, password, requirePassword: false });
+
+    if (validationMessage) {
+      response.status(400).json({ message: validationMessage });
+      return;
+    }
 
     if (role && !["bendahara", "walikelas", "siswa", "superadmin"].includes(role)) {
       response.status(400).json({ message: "Role tidak valid." });
@@ -1965,9 +2035,9 @@ app.patch("/api/users/:id", requireSuperadmin, async (request, response) => {
         RETURNING id, full_name, nis, email, profile_photo, profile_photo_original, role, class_id, is_active, created_at
       `,
       [
-        fullName ?? null,
+        fullName?.trim().replace(/\s+/g, " ") ?? null,
         nis?.trim() || null,
-        email?.trim() || null,
+        email?.trim() ?? null,
         nextPasswordHash,
         role ?? null,
         classId,
@@ -2274,6 +2344,12 @@ app.post("/api/treasurer/students", requireTreasurer, async (request, response) 
       profilePhotoOriginal = profilePhoto,
       isActive = true
     } = request.body;
+    const validationMessage = validateAccountInput({ fullName, email, password, requirePassword: true });
+
+    if (validationMessage) {
+      response.status(400).json({ message: validationMessage });
+      return;
+    }
 
     if (!classId) {
       response.status(400).json({ message: "Akun bendahara belum terhubung ke kelas." });
@@ -2340,6 +2416,12 @@ app.post("/api/homeroom/students", requireHomeroomTeacher, async (request, respo
       profilePhotoOriginal = profilePhoto,
       isActive = true
     } = request.body;
+    const validationMessage = validateAccountInput({ fullName, email, password, requirePassword: true });
+
+    if (validationMessage) {
+      response.status(400).json({ message: validationMessage });
+      return;
+    }
 
     if (!classId) {
       response.status(400).json({ message: "Akun wali kelas belum terhubung ke kelas." });
@@ -2399,6 +2481,12 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
     const classId = request.currentUser.classId;
     const { id } = request.params;
     const { fullName, nis, email, password, role = "siswa", profilePhoto, profilePhotoOriginal = profilePhoto, isActive } = request.body;
+    const validationMessage = validateAccountInput({ fullName, email, password, requirePassword: false });
+
+    if (validationMessage) {
+      response.status(400).json({ message: validationMessage });
+      return;
+    }
 
     if (!classId) {
       response.status(400).json({ message: "Akun belum terhubung ke kelas." });
@@ -2495,63 +2583,7 @@ app.patch("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (r
 });
 
 app.delete("/api/class-accounts/:id", requireTreasurerOrHomeroomTeacher, async (request, response) => {
-  try {
-    const classId = request.currentUser.classId;
-    const { id } = request.params;
-
-    if (!classId) {
-      response.status(400).json({ message: "Akun belum terhubung ke kelas." });
-      return;
-    }
-
-    if (Number(id) === Number(request.currentUser.id)) {
-      response.status(400).json({ message: "Akun yang sedang dipakai tidak bisa dihapus." });
-      return;
-    }
-
-    const clientIp = getClientIp(request);
-    const result = await pool.query(
-      `
-        UPDATE pengguna
-        SET
-          "delete" = 1,
-          is_active = FALSE,
-          updated_at = NOW(),
-          deleted_at = NOW(),
-          deleted_day = TO_CHAR(NOW(), 'Day'),
-          deleted_by_user_id = $3,
-          deleted_by_name = $4,
-          deleted_by_ip = $5
-        WHERE id = $1
-          AND class_id = $2
-          AND role IN ('siswa', 'bendahara')
-          AND COALESCE("delete", 0) = 0
-        RETURNING id
-      `,
-      [id, classId, request.currentUser.id, request.currentUser.fullName, clientIp]
-    );
-
-    if (result.rowCount === 0) {
-      response.status(404).json({ message: "Akun tidak ditemukan di kelas ini." });
-      return;
-    }
-
-    await pool.query(
-      `
-        UPDATE sesi_pengguna
-        SET is_active = FALSE, closed_at = NOW()
-        WHERE user_id = $1
-      `,
-      [id]
-    );
-
-    response.json({ success: true });
-  } catch (error) {
-    response.status(500).json({
-      message: "Gagal menghapus akun.",
-      error: error.message
-    });
-  }
+  response.status(403).json({ message: "Wali kelas dan bendahara tidak bisa menghapus akun siswa." });
 });
 
 app.post("/api/treasurer/payments", requireTreasurer, async (request, response) => {
@@ -2849,10 +2881,15 @@ app.patch("/api/classes/:id", requireSuperadmin, async (request, response) => {
 });
 
 app.delete("/api/classes/:id", requireSuperadmin, async (request, response) => {
+  const client = await pool.connect();
+
   try {
     const { id } = request.params;
     const clientIp = getClientIp(request);
-    const result = await pool.query(
+
+    await client.query("BEGIN");
+
+    const result = await client.query(
       `
         UPDATE kelas
         SET
@@ -2871,16 +2908,101 @@ app.delete("/api/classes/:id", requireSuperadmin, async (request, response) => {
     );
 
     if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
       response.status(404).json({ message: "Kelas tidak ditemukan." });
       return;
     }
 
-    response.json({ message: "Kelas dihapus." });
+    const deletedUsers = await client.query(
+      `
+        UPDATE pengguna
+        SET
+          "delete" = 1,
+          is_active = FALSE,
+          updated_at = NOW(),
+          deleted_at = NOW(),
+          deleted_day = TO_CHAR(NOW(), 'Day'),
+          deleted_by_user_id = $2,
+          deleted_by_name = $3,
+          deleted_by_ip = $4
+        WHERE class_id = $1
+          AND role IN ('siswa', 'bendahara', 'walikelas')
+          AND COALESCE("delete", 0) = 0
+        RETURNING id
+      `,
+      [id, request.currentUser.id, request.currentUser.fullName, clientIp]
+    );
+
+    await client.query(
+      `
+        UPDATE transaksi_kas
+        SET
+          "delete" = 1,
+          updated_at = NOW(),
+          deleted_at = NOW(),
+          deleted_day = TO_CHAR(NOW(), 'Day'),
+          deleted_by_user_id = $2,
+          deleted_by_name = $3,
+          deleted_by_ip = $4
+        WHERE (
+            class_id = $1
+            OR student_id IN (
+              SELECT id
+              FROM pengguna
+              WHERE class_id = $1
+            )
+          )
+          AND COALESCE("delete", 0) = 0
+      `,
+      [id, request.currentUser.id, request.currentUser.fullName, clientIp]
+    );
+
+    await client.query(
+      `
+        UPDATE bendahara_kelas
+        SET
+          "delete" = 1,
+          updated_at = NOW(),
+          deleted_at = NOW(),
+          deleted_day = TO_CHAR(NOW(), 'Day'),
+          deleted_by_user_id = $2,
+          deleted_by_name = $3,
+          deleted_by_ip = $4
+        WHERE class_id = $1
+          AND COALESCE("delete", 0) = 0
+      `,
+      [id, request.currentUser.id, request.currentUser.fullName, clientIp]
+    );
+
+    if (deletedUsers.rowCount > 0) {
+      await client.query(
+        `
+          UPDATE sesi_pengguna
+          SET
+            is_active = FALSE,
+            closed_at = NOW(),
+            updated_at = NOW()
+          WHERE user_id = ANY($1::int[])
+            AND COALESCE("delete", 0) = 0
+        `,
+        [deletedUsers.rows.map((row) => row.id)]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    response.json({
+      message: "Kelas, akun siswa, dan transaksi terkait berhasil dihapus.",
+      deletedUsers: deletedUsers.rowCount
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     response.status(500).json({
       message: "Gagal menghapus kelas",
       error: error.message
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -3437,9 +3559,33 @@ app.delete("/api/restore/users/:id", requireSuperadmin, async (request, response
 });
 
 app.post("/api/restore/classes/:id", requireSuperadmin, async (request, response) => {
+  const client = await pool.connect();
+
   try {
     const { id } = request.params;
-    const result = await pool.query(
+
+    await client.query("BEGIN");
+
+    const classResult = await client.query(
+      `
+        SELECT id, deleted_at
+        FROM kelas
+        WHERE id = $1
+          AND COALESCE("delete", 0) = 1
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    if (classResult.rowCount === 0) {
+      await client.query("ROLLBACK");
+      response.status(404).json({ message: "Kelas restore tidak ditemukan." });
+      return;
+    }
+
+    const classDeletedAt = classResult.rows[0].deleted_at;
+
+    const result = await client.query(
       `
         UPDATE kelas
         SET
@@ -3457,17 +3603,101 @@ app.post("/api/restore/classes/:id", requireSuperadmin, async (request, response
       [id]
     );
 
-    if (result.rowCount === 0) {
-      response.status(404).json({ message: "Kelas restore tidak ditemukan." });
-      return;
-    }
+    const restoredUsers = await client.query(
+      `
+        UPDATE pengguna
+        SET
+          "delete" = 0,
+          is_active = TRUE,
+          updated_at = NOW(),
+          deleted_at = NULL,
+          deleted_day = NULL,
+          deleted_by_user_id = NULL,
+          deleted_by_name = NULL,
+          deleted_by_ip = NULL
+        WHERE class_id = $1
+          AND role IN ('siswa', 'bendahara', 'walikelas')
+          AND COALESCE("delete", 0) = 1
+          AND (
+            $2::timestamp IS NULL
+            OR deleted_at IS NULL
+            OR deleted_at >= ($2::timestamp - INTERVAL '5 seconds')
+          )
+        RETURNING id
+      `,
+      [id, classDeletedAt]
+    );
 
-    response.json({ message: "Kelas berhasil dikembalikan." });
+    const restoredTransactions = await client.query(
+      `
+        UPDATE transaksi_kas
+        SET
+          "delete" = 0,
+          updated_at = NOW(),
+          deleted_at = NULL,
+          deleted_day = NULL,
+          deleted_by_user_id = NULL,
+          deleted_by_name = NULL,
+          deleted_by_ip = NULL
+        WHERE (
+            class_id = $1
+            OR student_id IN (
+              SELECT id
+              FROM pengguna
+              WHERE class_id = $1
+            )
+          )
+          AND COALESCE("delete", 0) = 1
+          AND (
+            $2::timestamp IS NULL
+            OR deleted_at IS NULL
+            OR deleted_at >= ($2::timestamp - INTERVAL '5 seconds')
+          )
+        RETURNING id
+      `,
+      [id, classDeletedAt]
+    );
+
+    const restoredTreasurers = await client.query(
+      `
+        UPDATE bendahara_kelas
+        SET
+          "delete" = 0,
+          updated_at = NOW(),
+          deleted_at = NULL,
+          deleted_day = NULL,
+          deleted_by_user_id = NULL,
+          deleted_by_name = NULL,
+          deleted_by_ip = NULL
+        WHERE class_id = $1
+          AND COALESCE("delete", 0) = 1
+          AND (
+            $2::timestamp IS NULL
+            OR deleted_at IS NULL
+            OR deleted_at >= ($2::timestamp - INTERVAL '5 seconds')
+          )
+        RETURNING class_id
+      `,
+      [id, classDeletedAt]
+    );
+
+    await client.query("COMMIT");
+
+    response.json({
+      message: "Kelas, akun, dan transaksi terkait berhasil dikembalikan.",
+      restoredUsers: restoredUsers.rowCount,
+      restoredTransactions: restoredTransactions.rowCount,
+      restoredTreasurers: restoredTreasurers.rowCount,
+      restoredClasses: result.rowCount
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     response.status(500).json({
       message: "Gagal restore kelas.",
       error: error.message
     });
+  } finally {
+    client.release();
   }
 });
 

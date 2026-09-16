@@ -1949,6 +1949,19 @@ select {
   outline: none;
 }
 
+.form-input.is-invalid,
+.form-select.is-invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+.form-error-text {
+  margin-top: 6px;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .password-input-wrap {
   position: relative;
 }
@@ -2693,9 +2706,20 @@ tbody td {
   box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.1);
 }
 
-.dashboard-distribution-row { align-items: stretch; }
-.dashboard-distribution-row > .cash-distribution-panel { margin: 0; min-width: 0; }
-.dashboard-distribution-row > .panel { min-width: 0; }
+.dashboard-distribution-row {
+  align-items: stretch;
+  grid-auto-rows: 1fr;
+}
+
+.dashboard-distribution-row > .cash-distribution-panel,
+.dashboard-distribution-row > .panel {
+  min-width: 0;
+  height: 100%;
+}
+
+.dashboard-distribution-row > .cash-distribution-panel {
+  margin: 0;
+}
 
 .cash-distribution-panel h3 {
   margin: 0 0 16px;
@@ -3916,6 +3940,18 @@ tbody td {
 
 .treasurer-modal .modal-body {
   padding-top: 6px;
+}
+
+.account-modal {
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+.account-modal .modal-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 150px);
+  padding-bottom: 20px;
 }
 
 .treasurer-dashboard-grid,
